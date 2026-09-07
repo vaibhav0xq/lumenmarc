@@ -95,9 +95,14 @@ async function scanLookalikes(): Promise<LookalikeHit[]> {
   return [...hits.values()];
 }
 
+/** Arbitrary constant identifying the "premium history writer" advisory lock. */
+const PERSIST_LOCK_KEY = 0x4c554d45; // "LUME"
+
 /**
  * Store one row per priced stock. Rate-limited against the database itself (not just this process)
- * so several serverless instances computing at once do not multiply the series.
+ * so several serverless instances computing at once do not multiply the series: the max(t) check and
+ * the insert run inside one transaction under an advisory lock, so concurrent writers serialize and
+ * the second one sees the first one's rows.
  */
 async function persist(snap: ComputedSnapshot): Promise<boolean> {
   if (!db) {
@@ -108,12 +113,6 @@ async function persist(snap: ComputedSnapshot): Promise<boolean> {
     return false;
   }
   const t = new Date(snap.computedAtUtc);
-  const [latest] = await db
-    .select({ maxT: sql<Date | null>`max(${premiumSnapshotsTable.t})` })
-    .from(premiumSnapshotsTable);
-  const maxT = latest?.maxT ? new Date(latest.maxT).getTime() : 0;
-  if (maxT && t.getTime() - maxT < PERSIST_MIN_GAP_MS) return false;
-
   const rows = [...snap.stocks.values()]
     .filter((s) => s.feed.state !== "unavailable")
     .map((s) => ({
@@ -128,12 +127,22 @@ async function persist(snap: ComputedSnapshot): Promise<boolean> {
       blockNumber: snap.blockNumber,
     }));
   if (rows.length === 0) return false;
-  await db.insert(premiumSnapshotsTable).values(rows);
-  if (ticks % 60 === 1) {
+
+  const inserted = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${PERSIST_LOCK_KEY})`);
+    const [latest] = await tx
+      .select({ maxT: sql<Date | string | null>`max(${premiumSnapshotsTable.t})` })
+      .from(premiumSnapshotsTable);
+    const maxT = latest?.maxT ? new Date(latest.maxT).getTime() : 0;
+    if (maxT && t.getTime() - maxT < PERSIST_MIN_GAP_MS) return false;
+    await tx.insert(premiumSnapshotsTable).values(rows);
+    return true;
+  });
+  if (inserted && ticks % 60 === 1) {
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 3600 * 1000);
     await db.delete(premiumSnapshotsTable).where(lt(premiumSnapshotsTable.t, cutoff));
   }
-  return true;
+  return inserted;
 }
 
 async function refresh(): Promise<void> {
@@ -214,10 +223,17 @@ export async function ensureSnapshot(): Promise<ComputedSnapshot | null> {
   return current;
 }
 
-/** Force a refresh (cron / warmers). Returns the refreshed snapshot or null when the refresh failed. */
+/** Force a refresh (authenticated cron). Returns the refreshed snapshot or null when the refresh failed. */
 export async function refreshNow(): Promise<ComputedSnapshot | null> {
   await run();
   return current;
+}
+
+/** Refresh only when the in-memory snapshot is older than MAX_AGE_MS (unauthenticated warmers). */
+export async function refreshIfStale(): Promise<{ snapshot: ComputedSnapshot | null; refreshed: boolean }> {
+  if (current && Date.now() - currentAtMs < MAX_AGE_MS) return { snapshot: current, refreshed: false };
+  await run();
+  return { snapshot: current, refreshed: true };
 }
 
 export function historyEnabled(): boolean {

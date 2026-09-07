@@ -21,9 +21,9 @@ All of them are optional; the deployment works with none of them set.
 | Variable | Purpose | Recommended for production? |
 | --- | --- | --- |
 | `BASE_RPC_URL` | Keyed Base mainnet RPC (Alchemy, QuickNode, Infura, Coinbase Developer Platform…). Without it the public Base RPCs are used with fallbacks, and an occasional refresh can fail on rate limits (the app keeps its last snapshot and says so). | **Yes** |
-| `DATABASE_URL` | Postgres connection string ([Neon](https://neon.tech) works well; Vercel Marketplace → Neon creates one in a click). Backs the premium **history** series only. Without it every other feature works and the history endpoints answer `history_disabled` — the UI shows that message instead of an empty chart. | Yes, for the demo |
+| `DATABASE_URL` | Postgres connection string ([Neon](https://neon.tech) works well; Vercel Marketplace → Neon creates one in a click — use the **pooled** connection string, the one containing `-pooler`, so many function instances share Neon's PgBouncer). Backs the premium **history** series only. Without it every other feature works and the history endpoints answer `history_disabled` — the UI shows that message instead of an empty chart. | Yes, for the demo |
 | `PUBLIC_APP_URL` | Canonical public origin, e.g. `https://lumenmarc.vercel.app`, used in share text and embed snippets. Falls back to the request host. | Optional |
-| `CRON_SECRET` | Protects `GET /api/cron/snapshot`. Vercel Cron sends it automatically as `Authorization: Bearer <CRON_SECRET>`. Set it if you enable a cron/pinger. | With a scheduler |
+| `CRON_SECRET` | Enables *forced* refreshes on `GET /api/cron/snapshot` for callers presenting `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends it automatically). Without it the endpoint only refreshes when the snapshot is stale, like any read endpoint, so it cannot be abused to amplify load. | With a scheduler |
 | `LOG_LEVEL` | pino level (`info` default). | Optional |
 
 Nothing else is read from the environment. (`SESSION_SECRET` from the original template is not used anywhere.)
@@ -39,8 +39,8 @@ DATABASE_URL=postgres://... pnpm --filter @workspace/db run push
 ## 3. How the serverless deployment behaves
 
 - **Snapshots are computed on demand.** A function instance recomputes the market snapshot when its in-memory copy is older than 45 s (one Base multicall pass + DexScreener, ≈0.5–3 s). Concurrent requests share one computation.
-- **CDN caching absorbs traffic.** Read endpoints send `Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=300`, so a burst of visitors does not become a burst of RPC calls.
-- **History is traffic-driven unless you schedule refreshes.** Rows are written at most once every 50 s *when a snapshot is computed*. If nobody visits, nothing is recorded. To keep the 24-hour chart continuous:
+- **CDN caching absorbs traffic.** Read endpoints send `Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60`, so a burst of visitors does not become a burst of RPC calls. Worst case a cached response is about two minutes behind the chain (snapshot age + CDN window); every payload carries its own `snapshotAtUtc` / block number, and the UI shows them.
+- **History is traffic-driven unless you schedule refreshes.** Rows are written at most once every 50 s *when a snapshot is computed*; the check-and-insert runs under a Postgres advisory lock, so several instances computing at once still produce one row per stock. If nobody visits, nothing is recorded. To keep the 24-hour chart continuous:
   - **Vercel Pro:** add a cron in `vercel.json`:
     ```json
     "crons": [{ "path": "/api/cron/snapshot", "schedule": "* * * * *" }]
@@ -55,7 +55,7 @@ Replace `APP` with your deployment URL:
 
 - `APP/` — the Tape with 13 rows and a market-session badge
 - `APP/api/healthz` → `{"status":"ok"}`
-- `APP/api/cron/snapshot` → `{"ok":true,"mode":"on-demand",...,"historyPersistence":"enabled"}` (add the bearer header if `CRON_SECRET` is set)
+- `APP/api/cron/snapshot` → `{"ok":true,"mode":"on-demand","forced":true,...,"historyPersistence":"enabled"}` (send `Authorization: Bearer <CRON_SECRET>` when the secret is set; without a secret the response says `"forced":false`)
 - `APP/api/overview`, `APP/api/stocks/NVDAc`, `APP/api/check?q=TSLAc`
 - `APP/s/NVDAc`, `APP/check?q=TSLAc`, `APP/portfolio/jesse.base.eth`, `APP/embed/NVDAc`
 - Reload `APP/s/NVDAc` after a couple of minutes: the premium-history chart should show points once rows exist.
@@ -68,7 +68,7 @@ pnpm run build:vercel            # writes .vercel/output/
 node scripts/vercel-serve.mjs    # http://localhost:3000 — static + the bundled /api function
 ```
 
-`scripts/vercel-serve.mjs` mimics Vercel's routing (static files, SPA fallback, `/api/*` → handler) so the exact bundle that ships can be exercised before pushing.
+`scripts/vercel-serve.mjs` mimics Vercel's routing (static files, SPA fallback, `/api/*` → handler) so the exact bundle that ships can be exercised before pushing. It does not interpret `config.json`; the routing there follows the same pattern the SvelteKit and Astro Vercel adapters use (a catch-all `dest` pointing at one function, which receives the original request path and query), so Express sees `/api/overview`, not `/api`.
 
 ## 6. Custom domain
 

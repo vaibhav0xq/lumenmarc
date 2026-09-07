@@ -20,7 +20,11 @@ export const premiumSnapshotsTable = pgTable(
     liquidityUsd: doublePrecision("liquidity_usd"),
     blockNumber: bigint("block_number", { mode: "number" }).notNull(),
   },
-  (table) => [index("premium_snapshots_ticker_t_idx").on(table.ticker, table.t)],
+  (table) => [
+    index("premium_snapshots_ticker_t_idx").on(table.ticker, table.t),
+    // Global "latest row" lookups (persist rate-limit) and retention pruning scan by time alone.
+    index("premium_snapshots_t_idx").on(table.t),
+  ],
 );
 
 export const insertPremiumSnapshotSchema = createInsertSchema(premiumSnapshotsTable).omit({ id: true });

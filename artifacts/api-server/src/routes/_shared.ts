@@ -13,11 +13,12 @@ export function sendError(res: Response, status: number, error: string, code?: s
 
 /**
  * Browser cache for `seconds`; CDN/edge caches (Vercel, Cloudflare) for twice that and may serve a
- * stale copy for up to five minutes while revalidating in the background, so bursts of traffic
- * never fan out into bursts of RPC/DexScreener calls.
+ * stale copy for up to one more minute while revalidating in the background, so bursts of traffic
+ * never fan out into bursts of RPC/DexScreener calls. Worst case a cached read is ~2 minutes behind
+ * the chain (snapshot age ≤45 s + s-maxage + SWR); every payload carries its own timestamps.
  */
 export function cacheFor(res: Response, seconds: number): void {
-  res.setHeader("cache-control", `public, max-age=${seconds}, s-maxage=${seconds * 2}, stale-while-revalidate=300`);
+  res.setHeader("cache-control", `public, max-age=${seconds}, s-maxage=${seconds * 2}, stale-while-revalidate=60`);
 }
 
 /** Returns the current snapshot or replies 503 and returns null. */

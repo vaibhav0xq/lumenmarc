@@ -19,9 +19,12 @@ export const dbConfigured: boolean = Boolean(databaseUrl);
 export const pool: pg.Pool | null = databaseUrl
   ? new Pool({
       connectionString: databaseUrl,
-      // Serverless-friendly: a few connections per process, released quickly.
-      max: 5,
+      // Serverless-friendly: the app needs at most one connection per in-flight request, so keep the
+      // per-instance pool tiny and release idle connections quickly. On Vercel + Neon, use the pooled
+      // ("-pooler") connection string so many instances share Neon's PgBouncer rather than raw slots.
+      max: 3,
       idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 5_000,
     })
   : null;
 
