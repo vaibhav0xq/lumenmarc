@@ -19,11 +19,11 @@
 
 > "This is LumenMarc — a clear market mark for tokenized stocks. Coinbase Tokenized Stocks launched on Base two weeks ago as B20 tokens. LumenMarc is a read-only integrity layer that answers three questions before anyone touches one of them onchain: is this token really Coinbase-issued, is this pool price fair against the real stock, and what does one token actually represent."
 
-*Screen: hover the header, then scroll slowly to the Market Status card.*
+*Screen: let the reference-line instrument in the hero settle (marks are the 13 tokens, coloured by deviation state, ordered by premium, hollow marks are unpriced / no-supply tokens), hover one mark to show pool vs reference, then scroll slowly to the session strip.*
 
 ## 0:20 – 0:50 · The problem, with live evidence (Tape)
 
-> "Everything here is measured live on Base — no mocks. The market card tells you the US session state, because the Chainlink reference feeds only print while the US market trades. Right now they're **[held: last Friday's close]**."
+> "Everything here is measured live on Base — no mocks. The reference line is the whole product in one picture: the official Chainlink price is the line, every mark is a pool trading above or below it. The session strip tells you the US session state, because the Chainlink reference feeds only print while the US market trades. Right now they're **[held: last Friday's close]**."
 
 *Screen: Integrity Alerts.*
 

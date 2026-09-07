@@ -4,6 +4,14 @@ LumenMarc deploys to Vercel as **one project**: the Vite front end is served as 
 
 The repository ships a `vercel.json` (install + build commands) and a build script (`scripts/vercel-build.mjs`) that produces a [Build Output API](https://vercel.com/docs/build-output-api) directory, so the Vercel dashboard needs almost no configuration.
 
+**Recommended setup at a glance (Hobby plan, all free):**
+
+1. Import the repo (section 1) with `BASE_RPC_URL` and `CRON_SECRET` set.
+2. Storage tab → **Create Database → Neon** (Vercel Marketplace). The integration injects `DATABASE_URL` (pooled) into the project automatically; redeploy once so the function picks it up.
+3. Apply the schema once from your machine (section 2 → Database schema).
+4. Create a free cron-job.org job that calls `/api/cron/snapshot` every minute with the bearer header (section 3) — this keeps the 24-hour premium history continuous on a plan without per-minute crons.
+5. Run the smoke test (section 4).
+
 ## 1. Import the repository
 
 1. Vercel dashboard → **Add New… → Project** → import `github.com/vaibhav0xq/lumenmarc`.
@@ -41,12 +49,11 @@ DATABASE_URL=postgres://... pnpm --filter @workspace/db run push
 - **Snapshots are computed on demand.** A function instance recomputes the market snapshot when its in-memory copy is older than 45 s (one Base multicall pass + DexScreener, ≈0.5–3 s). Concurrent requests share one computation.
 - **CDN caching absorbs traffic.** Read endpoints send `Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60`, so a burst of visitors does not become a burst of RPC calls. Worst case a cached response is about two minutes behind the chain (snapshot age + CDN window); every payload carries its own `snapshotAtUtc` / block number, and the UI shows them.
 - **History is traffic-driven unless you schedule refreshes.** Rows are written at most once every 50 s *when a snapshot is computed*; the check-and-insert runs under a Postgres advisory lock, so several instances computing at once still produce one row per stock. If nobody visits, nothing is recorded. To keep the 24-hour chart continuous:
-  - **Vercel Pro:** add a cron in `vercel.json`:
+  - **Hobby plan (recommended setup — free):** Vercel Hobby crons run at most once a day, so use an external pinger. On [cron-job.org](https://cron-job.org) (free) create a job: URL `https://<your-domain>/api/cron/snapshot`, schedule **every 1 minute**, request method GET, and under *Advanced → Headers* add `Authorization: Bearer <CRON_SECRET>` (the same value you set in Vercel). Enable "save responses" once to confirm it returns `"ok":true,"forced":true`. UptimeRobot (5-minute interval, custom header on paid plans only) or a scheduled GitHub Action work too.
+  - **Vercel Pro:** add a cron in `vercel.json` and Vercel sends the bearer header itself:
     ```json
     "crons": [{ "path": "/api/cron/snapshot", "schedule": "* * * * *" }]
     ```
-    (Hobby plan crons run at most once a day, which is not useful here.)
-  - **Any plan:** point a free external pinger (cron-job.org, UptimeRobot, GitHub Actions on a schedule) at `https://<your-domain>/api/cron/snapshot` every minute with header `Authorization: Bearer <CRON_SECRET>`.
 - **Nothing is faked.** If Base RPC and DexScreener both fail before the first snapshot on a cold instance, the API answers `503 snapshot_unavailable` and the UI says so. After a first success, failures keep the previous block-stamped snapshot and surface a warning.
 
 ## 4. Smoke test after the first deploy

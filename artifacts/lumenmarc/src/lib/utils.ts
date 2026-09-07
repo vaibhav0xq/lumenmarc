@@ -45,3 +45,42 @@ export function formatAgo(iso: string | null | undefined, now: number = Date.now
   if (hr < 48) return `${hr}h ago`;
   return `${Math.round(hr / 24)}d ago`;
 }
+
+/**
+ * Format an ISO timestamp in the US market's zone with an explicit "ET" label.
+ * Never throws: invalid or missing input yields "—" so a malformed payload
+ * cannot take a page down.
+ */
+export function formatEt(
+  iso: string | null | undefined,
+  style: "datetime" | "date" | "time" = "datetime",
+): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const opts: Intl.DateTimeFormatOptions =
+    style === "date"
+      ? { month: "short", day: "numeric", year: "numeric" }
+      : style === "time"
+        ? { hour: "2-digit", minute: "2-digit", hour12: false }
+        : { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false };
+  return `${new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", ...opts }).format(d)} ET`;
+}
+
+/**
+ * The API's own explanation of a failed read. The generated client throws
+ * ApiError with the JSON body on `.data` ({ error: string }); fall back to the
+ * error message, never to an invented one.
+ */
+export function apiErrorMessage(error: unknown, fallback = "Request failed."): string {
+  if (error && typeof error === "object") {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === "object") {
+      const msg = (data as { error?: unknown; message?: unknown }).error ?? (data as { message?: unknown }).message;
+      if (typeof msg === "string" && msg.trim()) return msg;
+    }
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return fallback;
+}

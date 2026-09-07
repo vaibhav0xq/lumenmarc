@@ -1,6 +1,5 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-/* Fonts (Plus Jakarta Sans, JetBrains Mono) are loaded from index.html so the production build keeps them. */
 
 @plugin "@tailwindcss/typography";
 
@@ -46,8 +45,11 @@
   --color-dev-dislocated: hsl(var(--dev-dislocated));
   --color-dev-unpriced: hsl(var(--dev-unpriced));
 
-  --font-sans: 'Plus Jakarta Sans', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --color-cyan-glow: hsl(var(--cyan-glow));
+
+  --font-sans: 'Geist', sans-serif;
+  --font-mono: 'Geist Mono', monospace;
+  --font-serif: 'Instrument Serif', serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -56,50 +58,53 @@
 }
 
 :root, .dark {
-  /* Bloomberg calm, Base clean - extremely dark muted navy/slate */
-  --background: 222 47% 4%;
+  /* Extremely dark navy base for cinematic effect */
+  --background: 225 30% 4%;
   --foreground: 210 40% 98%;
 
-  --card: 222 47% 6%;
+  --card: 225 30% 6%;
   --card-foreground: 210 40% 98%;
-  --card-border: 217 32% 17%;
+  --card-border: 225 20% 12%;
 
-  --popover: 222 47% 6%;
+  --popover: 225 30% 6%;
   --popover-foreground: 210 40% 98%;
-  --popover-border: 217 32% 17%;
+  --popover-border: 225 20% 12%;
 
-  --border: 217 32% 17%;
-  --input: 217 32% 17%;
-  --ring: 217 91% 60%;
+  --border: 225 20% 16%;
+  --input: 225 20% 16%;
+  --ring: 221 100% 50%; /* Base blue */
 
   /* Base Blue */
-  --primary: 217 91% 60%;
-  --primary-foreground: 210 40% 98%;
+  --primary: 221 100% 50%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 217 32% 17%;
+  /* Darker surface for contrast */
+  --secondary: 225 20% 10%;
   --secondary-foreground: 210 40% 98%;
 
-  --muted: 217 32% 17%;
+  --muted: 225 20% 12%;
   --muted-foreground: 215 20% 65%;
 
-  --accent: 217 32% 17%;
-  --accent-foreground: 210 40% 98%;
+  --accent: 188 86% 53%; /* Cyan for luminous accents */
+  --accent-foreground: 0 0% 100%;
 
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
   /* Status Colors */
-  --feed-live: 142 71% 45%;
-  --feed-held: 215 20% 65%;
-  --feed-stale: 38 92% 50%;
-  --feed-unavailable: 0 84% 60%;
+  --feed-live: 152 69% 31%; /* Mint */
+  --feed-held: 215 20% 65%; /* Slate */
+  --feed-stale: 38 92% 50%; /* Amber */
+  --feed-unavailable: 0 84% 60%; /* Coral */
 
-  --dev-fair: 210 40% 98%;
-  --dev-elevated: 38 92% 50%;
-  --dev-dislocated: 0 84% 60%;
-  --dev-unpriced: 215 20% 65%;
+  --dev-fair: 152 69% 31%; /* Mint */
+  --dev-elevated: 38 92% 50%; /* Amber */
+  --dev-dislocated: 0 84% 60%; /* Coral */
+  --dev-unpriced: 215 20% 65%; /* Slate */
+  
+  --cyan-glow: 188 86% 53%;
 
-  --radius: 0.5rem;
+  --radius: 0.25rem;
 }
 
 @layer base {
@@ -115,4 +120,18 @@
 /* Utilities for tabular numbers */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Subtle grain overlay for cinematic feel */
+.bg-grain {
+  position: relative;
+}
+.bg-grain::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.02;
+  z-index: 50;
 }

@@ -37,7 +37,7 @@ Paths below are relative to the deployed app. The API is mounted at `/api` on th
 
 | Step | Open | What you will see |
 | --- | --- | --- |
-| 1 | `/` | The **Tape**: US session state, integrity alerts (lookalikes, dislocations, non-USD counter-assets, zero-supply tokens), all 13 Coinbase stocks with reference vs. pool price |
+| 1 | `/` | The **reference line** (all 13 tokens plotted by premium against the Chainlink reference, coloured by deviation state) and the **Tape**: US session state, integrity alerts (lookalikes, dislocations, non-USD counter-assets, zero-supply tokens), every stock with reference vs. pool price |
 | 2 | `/s/NVDAc` | A full **label**: Verify (five checks), Price (reference, primary pool, all venues, 24h premium history, size check), Own (multiplier, share-equivalents, dividend policy, ISIN, pauses) |
 | 3 | `/s/TSLAc` | The **unpriced** case: the only pool quotes TSLAc against a third-party token, so LumenMarc shows the inferred price with a danger warning and declines to compute a premium or a size check |
 | 4 | `/check?q=0xB20000000000000000000004255E0c2A4B401401` | **Lookalike verdict**: a third-party B20 "MSTR" token, with the official MSTRc address shown |
@@ -151,6 +151,7 @@ artifacts/api-server/           Express 5 API (mounted at /api)
   src/routes/                   market, overview, stocks, history, size-check, check, portfolio, cron
   src/index.ts / src/vercel.ts  Long-running server entry / serverless handler entry
 artifacts/lumenmarc/            React + Vite + Tailwind front end (Tape, label, check, portfolio, embed, about)
+artifacts/lumenmarc/DESIGN.md   "The Reference Line" design system: tokens, type, the hero instrument and row-scale mark, state badges
 artifacts/mockup-sandbox/       Internal component-preview sandbox used during design work (not deployed)
 lib/api-spec/openapi.yaml       API contract → Orval → lib/api-zod + lib/api-client-react
 lib/db/                         Drizzle schema (premium_snapshots); optional at runtime
