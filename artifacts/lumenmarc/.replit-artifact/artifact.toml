@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "LumenMarc"
+description = "LumenMarc is the fair-value and integrity layer for Coinbase Tokenized Stocks on Base. Before trading a tokenized stock, it verifies the token is Coinbase-issued, compares onchain pool prices against the official Chainlink reference price with premium/discount and oracle freshness, and shows exactly what a holder owns (multiplier, share-equivalents, corporate actions). Built for eligible non-US users and integrators; factual, non-custodial, no investment advice."
+version = "1.0.0"
+id = "artifacts/lumenmarc"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19315
+
+[services.development]
+run = "pnpm --filter @workspace/lumenmarc run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lumenmarc", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/lumenmarc/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19315"
+BASE_PATH = "/"

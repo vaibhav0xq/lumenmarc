@@ -1,0 +1,251 @@
+{
+  "generated": "2026-09-07",
+  "sources": [
+    {
+      "key": "base-docs-ts",
+      "title": "Tokenized Stocks on Base (technical guide)",
+      "url": "https://docs.base.org/base-chain/asset-issuance/tokenized-stocks-on-base",
+      "publisher": "Base Docs",
+      "date": "live, accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/primary-docs-tokenized-stocks-on-base.md"
+    },
+    {
+      "key": "cb-tokenize",
+      "title": "Coinbase Tokenized Stocks (coinbase.com/tokenize)",
+      "url": "https://www.coinbase.com/tokenize",
+      "publisher": "Coinbase",
+      "date": "live, accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/primary-coinbase-tokenize.md"
+    },
+    {
+      "key": "base-stocks",
+      "title": "Coinbase Tokenized Stocks on Base (ecosystem page)",
+      "url": "https://www.base.org/stocks",
+      "publisher": "Base",
+      "date": "live, accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/gapfill-01-base-stocks.md"
+    },
+    {
+      "key": "base-launch",
+      "title": "Stocks just got updated (launch post)",
+      "url": "https://blog.base.org/tokenized-stocks",
+      "publisher": "Base",
+      "date": "2026-08-24",
+      "tier": 1,
+      "path": "research/sources/application-layer-02-base-launch-blog.md"
+    },
+    {
+      "key": "base-rfb",
+      "title": "Request for Builders: Tokenized Stocks",
+      "url": "https://blog.base.org/request-for-builders-tokenized-stocks",
+      "publisher": "Base",
+      "date": "2026-09-01",
+      "tier": 1,
+      "path": "research/sources/base-builder-quest-01-tokenized-stocks-rfb.md"
+    },
+    {
+      "key": "b20-spec",
+      "title": "B20 token standard spec",
+      "url": "https://docs.base.org/base-chain/asset-issuance/b20",
+      "publisher": "Base Docs",
+      "date": "live, accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/b20-product-technical-02-b20-spec.md"
+    },
+    {
+      "key": "chainlink-feeds",
+      "title": "Chainlink price feeds for Coinbase Tokenized Stocks",
+      "url": "https://docs.base.org/base-chain/asset-issuance/tokenized-stocks-on-base#price-feeds",
+      "publisher": "Base Docs / Chainlink",
+      "date": "live, accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/b20-product-technical-05-chainlink-feeds.md"
+    },
+    {
+      "key": "quest-announce",
+      "title": "Builder Quests are back — $5,000 prize pool (X thread)",
+      "url": "https://x.com/buildonbase/status/2095105184120664122",
+      "publisher": "Base Build (@buildonbase)",
+      "date": "2026-09-02",
+      "tier": 1,
+      "path": "research/sources/gapfill-snippets.md",
+      "note": "Snippets only; thread not fetchable. Ends Sep 9, 2026 11:59pm EST."
+    },
+    {
+      "key": "quest-prizes",
+      "title": "Prizes: $2,000 top project, $3,000 split between 5 finalists",
+      "url": "https://x.com/buildonbase/status/2095105192794464357",
+      "publisher": "Base Build (@buildonbase)",
+      "date": "2026-09-02",
+      "tier": 1,
+      "path": "research/sources/gapfill-snippets.md",
+      "note": "Snippet only."
+    },
+    {
+      "key": "quest-submit",
+      "title": "How to submit your entry: 1. Post a Loom…",
+      "url": "https://x.com/buildonbase/status/2095105190663766466",
+      "publisher": "Base Build (@buildonbase)",
+      "date": "2026-09-02",
+      "tier": 1,
+      "path": "research/sources/base-builder-quest-snippets.md",
+      "note": "Snippet only; remaining steps unknown."
+    },
+    {
+      "key": "quest-prev",
+      "title": "Previous Builder Quest results (OpenClaw agents, 5 ETH, 125+ entries)",
+      "url": "https://x.com/buildonbase/status/2028580552853672176",
+      "publisher": "Base Build (@buildonbase)",
+      "date": "2026-03-02",
+      "tier": 1,
+      "path": "research/sources/gapfill-snippets.md"
+    },
+    {
+      "key": "batches-004",
+      "title": "Base Batches 004",
+      "url": "https://www.basebatches.xyz/",
+      "publisher": "Base",
+      "date": "accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/base-builder-quest-03-batches-004.md"
+    },
+    {
+      "key": "base-account",
+      "title": "Base Account SDK overview (Sign in with Base, Base Pay, Spend Permissions, Sub Accounts)",
+      "url": "https://docs.base.org/sdks/base-account/overview",
+      "publisher": "Base Docs",
+      "date": "live, accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/gapfill-02-base-account-sdk.md"
+    },
+    {
+      "key": "cb-verifications",
+      "title": "Coinbase Verifications (EAS schemas on Base)",
+      "url": "https://github.com/coinbase/verifications",
+      "publisher": "Coinbase",
+      "date": "accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/gapfill-03-coinbase-verifications.md"
+    },
+    {
+      "key": "galaxy",
+      "title": "Coinbase Tokenized Stocks: A Real Share, or a Claim on a Share?",
+      "url": "https://www.galaxy.com/insights/research/coinbase-tokenized-stocks-base-third-party-issuer-sec-innovation-exemption",
+      "publisher": "Galaxy Research",
+      "date": "2026-08 (accessed 2026-09-07)",
+      "tier": 2,
+      "path": "research/sources/gapfill-03-galaxy-analysis.md"
+    },
+    {
+      "key": "sec-ui",
+      "title": "SEC staff statement on broker-dealer registration and certain user interfaces",
+      "url": "https://www.sec.gov/newsroom/speeches-statements/staff-statement-regarding-broker-dealer-registration-certain-user-interfaces-utilized-prepare-staff-statement-regarding-broker-dealer-registration-certain-user-interfaces-utilized",
+      "publisher": "SEC",
+      "date": "2026-04-13",
+      "tier": 1,
+      "path": "research/sources/legal-compliance-02-sec-defi-interfaces.md"
+    },
+    {
+      "key": "sec-tokenized",
+      "title": "SEC Corp Fin statement on tokenized securities",
+      "url": "https://www.sec.gov/newsroom/speeches-statements/corp-fin-statement-tokenized-securities-012826-statement-tokenized-securities",
+      "publisher": "SEC",
+      "date": "2026-01-28",
+      "tier": 1,
+      "path": "research/sources/legal-compliance-snippets.md"
+    },
+    {
+      "key": "esma",
+      "title": "EU supervisory authorities warn consumers on tokenised stocks",
+      "url": "https://www.esma.europa.eu/press-news/esma-news/eu-supervisory-authorities-warn-consumers-risks-and-limited-protection-certain",
+      "publisher": "ESMA",
+      "date": "2025-10-06",
+      "tier": 1,
+      "path": "research/sources/legal-compliance-snippets.md"
+    },
+    {
+      "key": "reuters-esma",
+      "title": "European regulator says tokenised stocks risk investor misunderstanding",
+      "url": "https://www.reuters.com/sustainability/boards-policy-regulation/european-regulator-says-tokenised-stocks-risk-investor-misunderstanding-2025-09-01",
+      "publisher": "Reuters",
+      "date": "2025-09-01",
+      "tier": 2,
+      "path": "research/sources/legal-compliance-snippets.md"
+    },
+    {
+      "key": "glider",
+      "title": "Onchain stocks live on Glider with Ondo",
+      "url": "https://blog.glider.fi/onchain-stocks-live-on-glider-with-ondo-finance",
+      "publisher": "Glider",
+      "date": "2026 (undated)",
+      "tier": 1,
+      "path": "research/sources/application-layer-snippets.md"
+    },
+    {
+      "key": "bankr",
+      "title": "Bankr docs: tokenized stocks",
+      "url": "https://docs.bankr.bot/features/trading/tokenized-stocks/",
+      "publisher": "Bankr",
+      "date": "undated",
+      "tier": 1,
+      "path": "research/sources/application-layer-snippets.md"
+    },
+    {
+      "key": "castar",
+      "title": "Castar: shareholder identity for tokenized stocks",
+      "url": "https://castar.tech/",
+      "publisher": "Castar",
+      "date": "undated",
+      "tier": 1,
+      "path": "research/sources/application-layer-snippets.md"
+    },
+    {
+      "key": "steakhouse-dune",
+      "title": "Steakhouse Dune: tokenized public securities",
+      "url": "https://dune.com/steakhouse/tokenized-securities",
+      "publisher": "Steakhouse / Dune",
+      "date": "undated",
+      "tier": 1,
+      "path": "research/sources/application-layer-snippets.md"
+    },
+    {
+      "key": "xstocks-legal",
+      "title": "xStocks / Backed legal structure",
+      "url": "https://xstocks.com/",
+      "publisher": "Backed",
+      "date": "accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/issuer-venue-02-xstocks-legal.md"
+    },
+    {
+      "key": "ondo-legal",
+      "title": "Ondo Global Markets legal structure",
+      "url": "https://ondo.finance/",
+      "publisher": "Ondo",
+      "date": "accessed 2026-09-07",
+      "tier": 1,
+      "path": "research/sources/issuer-venue-03-ondo-legal.md"
+    },
+    {
+      "key": "kraken-hack",
+      "title": "xStocks hackathon at EthCC (60 builders)",
+      "url": "https://blog.kraken.com/event/xstocks-hackathon-ethcc-2026",
+      "publisher": "Kraken",
+      "date": "2026-04-22",
+      "tier": 1,
+      "path": "research/sources/application-layer-snippets.md"
+    },
+    {
+      "key": "onchain-snapshot",
+      "title": "Own on-chain + DEX snapshot (Base mainnet block 50995152)",
+      "url": "https://mainnet.base.org",
+      "publisher": "Own measurement via viem multicall + DexScreener API",
+      "date": "2026-09-07T11:14Z",
+      "tier": 1,
+      "path": "research/onchain-snapshot-2026-09-07.md"
+    }
+  ]
+}

@@ -1,0 +1,882 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: >-
+    LumenMarc public API — fair-value and integrity data for Coinbase Tokenized
+    Stocks (B20) on Base. All data is factual and read-only: issuer verification,
+    Chainlink reference vs. onchain pool prices, oracle freshness, multiplier and
+    share-equivalent ownership facts. No investment advice.
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: market
+    description: US equity market session status
+  - name: stocks
+    description: Coinbase Tokenized Stocks (B20) labels
+  - name: integrity
+    description: Verify arbitrary tokens and pools
+  - name: portfolio
+    description: What a wallet actually owns
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /market:
+    get:
+      operationId: getMarketStatus
+      tags: [market]
+      summary: US equity market session status
+      description: Whether the reference market (NYSE/Nasdaq, America/New_York) is open, and when it next opens or closes.
+      responses:
+        "200":
+          description: Market status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketStatus"
+  /overview:
+    get:
+      operationId: getOverview
+      tags: [stocks]
+      summary: Market-wide overview (the tape header)
+      description: Aggregate snapshot across all Coinbase tokenized stocks — float, liquidity, feed freshness, biggest dislocations and integrity alerts.
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+  /stocks:
+    get:
+      operationId: listStocks
+      tags: [stocks]
+      summary: List all Coinbase tokenized stocks with live label summaries
+      responses:
+        "200":
+          description: Stock summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockSummary"
+  /stocks/{ticker}:
+    get:
+      operationId: getStock
+      tags: [stocks]
+      summary: Full label for one tokenized stock
+      description: Verify / Price / Own — issuer verification, reference vs. every known pool, oracle freshness, multiplier, supply, pauses, corporate actions and disclosures.
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          description: Token ticker such as NVDAc (case-insensitive; the trailing c is optional) or the token address.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stock label
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockLabel"
+        "404":
+          description: Unknown ticker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /history:
+    get:
+      operationId: getStockHistory
+      tags: [stocks]
+      summary: Premium/discount history for one tokenized stock
+      description: Time series of reference price, primary pool price and premium from LumenMarc's periodic snapshots.
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          description: Token symbol, e.g. NVDAc (case-insensitive).
+          schema:
+            type: string
+        - name: window
+          in: query
+          required: false
+          description: Lookback window.
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d]
+            default: 24h
+      responses:
+        "200":
+          description: History
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PremiumHistory"
+        "404":
+          description: Unknown ticker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /size-check:
+    get:
+      operationId: getSizeCheck
+      tags: [stocks]
+      summary: How a given trade size relates to available liquidity
+      description: Factual sizing information for the primary pool — share of liquidity and a conservative upper bound on price impact. Not a quote and not a recommendation.
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          description: Token symbol, e.g. NVDAc (case-insensitive).
+          schema:
+            type: string
+        - name: amountUsd
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100000000
+        - name: side
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [buy, sell]
+            default: buy
+      responses:
+        "200":
+          description: Size check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SizeCheck"
+        "404":
+          description: Unknown ticker or no venue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /check:
+    get:
+      operationId: checkAddress
+      tags: [integrity]
+      summary: Verify any token or pool address
+      description: Paste any Base address or ticker. Returns whether it is a Coinbase-issued tokenized stock, a lookalike B20 token, another token, or a liquidity pool — with premium vs. the official reference where one applies.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: A 0x address (token or pool), a ticker like NVDAc, or a Basename.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckResult"
+        "400":
+          description: Missing or malformed query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /portfolio/{account}:
+    get:
+      operationId: getPortfolio
+      tags: [portfolio]
+      summary: What a wallet owns across all Coinbase tokenized stocks
+      description: Raw token balances, share-equivalents after the multiplier, and value at the official reference price. Read-only; no wallet connection required.
+      parameters:
+        - name: account
+          in: path
+          required: true
+          description: A 0x address or a Basename such as jesse.base.eth
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Portfolio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Portfolio"
+        "400":
+          description: Not an address or resolvable Basename
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+    MarketState:
+      type: string
+      description: Session state of the US reference market.
+      enum: [open, premarket, afterhours, closed, holiday]
+    MarketStatus:
+      type: object
+      required: [state, isOpen, exchangeTimezone, nowUtc, nextOpenUtc, reason, localTime]
+      properties:
+        state:
+          $ref: "#/components/schemas/MarketState"
+        isOpen:
+          type: boolean
+          description: True only during the regular session (09:30–16:00 ET) when the Chainlink feeds update.
+        exchangeTimezone:
+          type: string
+          example: America/New_York
+        nowUtc:
+          type: string
+          format: date-time
+        localTime:
+          type: string
+          description: Current exchange-local time, human readable.
+        nextOpenUtc:
+          type: string
+          format: date-time
+        nextCloseUtc:
+          type: ["string", "null"]
+          format: date-time
+        reason:
+          type: string
+          description: Plain-English reason, e.g. "Regular session", "Weekend", "Labor Day".
+        holidayName:
+          type: ["string", "null"]
+    FeedState:
+      type: string
+      description: live = updating during market hours; held = market closed so the last close is intentionally held; stale = market open but the feed has not updated within its bounds; unavailable = could not be read.
+      enum: [live, held, stale, unavailable]
+    FeedReading:
+      type: object
+      required: [feedAddress, description, price, decimals, updatedAtUtc, ageSeconds, state, note]
+      properties:
+        feedAddress:
+          type: string
+        description:
+          type: string
+          example: Coinbase NVDA
+        price:
+          type: number
+          description: Total-return reference price in USD (already multiplier-adjusted).
+        priceRaw:
+          type: string
+          description: Raw int256 answer as a decimal string.
+        decimals:
+          type: integer
+        roundId:
+          type: string
+        updatedAtUtc:
+          type: string
+          format: date-time
+        ageSeconds:
+          type: integer
+        state:
+          $ref: "#/components/schemas/FeedState"
+        note:
+          type: string
+          description: Plain-English explanation of the state, e.g. "Holding Friday's close — the feed updates only during US market hours."
+    DeviationState:
+      type: string
+      description: fair = within 50 bps of reference; elevated = 50–300 bps; dislocated = more than 300 bps; unpriced = no venue or no reference.
+      enum: [fair, elevated, dislocated, unpriced]
+    TokenRef:
+      type: object
+      required: [address, symbol]
+      properties:
+        address:
+          type: string
+        symbol:
+          type: string
+        name:
+          type: ["string", "null"]
+        verified:
+          type: ["boolean", "null"]
+          description: True if this is a Coinbase-issued tokenized stock; null if not applicable (e.g. USDC/WETH).
+        isStablecoin:
+          type: boolean
+    VenueQuote:
+      type: object
+      required: [dex, dexLabel, pairAddress, url, baseToken, quoteToken, priceUsd, premiumBps, premiumPct, liquidityUsd, volume24hUsd, txns24h, deviationState, isPrimary, warnings]
+      properties:
+        dex:
+          type: string
+          example: aerodrome
+        dexLabel:
+          type: string
+          example: Aerodrome
+        pairAddress:
+          type: string
+        url:
+          type: string
+        baseToken:
+          $ref: "#/components/schemas/TokenRef"
+        quoteToken:
+          $ref: "#/components/schemas/TokenRef"
+        priceUsd:
+          type: number
+        premiumBps:
+          type: ["integer", "null"]
+          description: (pool − reference) / reference in basis points. Positive = pool trades above the reference.
+        premiumPct:
+          type: ["number", "null"]
+        liquidityUsd:
+          type: number
+        volume24hUsd:
+          type: number
+        txns24h:
+          type: integer
+        priceChange24hPct:
+          type: ["number", "null"]
+        deviationState:
+          $ref: "#/components/schemas/DeviationState"
+        isPrimary:
+          type: boolean
+          description: Deepest venue for this token; used for the headline premium.
+        warnings:
+          type: array
+          items:
+            type: string
+    Check:
+      type: object
+      required: [id, label, passed, detail]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        passed:
+          type: ["boolean", "null"]
+          description: null = informational / could not be determined.
+        detail:
+          type: string
+    Issuer:
+      type: object
+      required: [verified, name, source, note]
+      properties:
+        verified:
+          type: boolean
+        name:
+          type: string
+          example: Coinbase Onchain SPV Ltd. (ADGM)
+        source:
+          type: string
+          description: Where the official address list comes from.
+        note:
+          type: string
+    StockSummary:
+      type: object
+      required: [ticker, underlying, name, address, decimals, status, issuer, reference, multiplier, multiplierRaw, totalSupply, shareEquivalents, floatUsd, primaryVenue, venueCount, deviationState, headline, updatedAtUtc]
+      properties:
+        ticker:
+          type: string
+          example: NVDAc
+        underlying:
+          type: string
+          example: NVDA
+        name:
+          type: string
+          example: NVIDIA Corporation
+        address:
+          type: string
+        decimals:
+          type: integer
+        status:
+          type: string
+          description: live = has circulating supply; no-supply = token exists but nothing has been minted yet.
+          enum: [live, no-supply]
+        issuer:
+          $ref: "#/components/schemas/Issuer"
+        reference:
+          $ref: "#/components/schemas/FeedReading"
+        multiplier:
+          type: number
+          description: Real multiplier (WAD ÷ 1e18). 1.0 means one token = one share-equivalent.
+        multiplierRaw:
+          type: string
+        totalSupply:
+          type: number
+          description: Raw token units in circulation (human units).
+        shareEquivalents:
+          type: number
+          description: totalSupply × multiplier.
+        floatUsd:
+          type: ["number", "null"]
+          description: shareEquivalents × reference price.
+        primaryVenue:
+          oneOf:
+            - $ref: "#/components/schemas/VenueQuote"
+            - type: "null"
+        venueCount:
+          type: integer
+        deviationState:
+          $ref: "#/components/schemas/DeviationState"
+        headline:
+          type: string
+          description: One neutral plain-English sentence summarising the label.
+        updatedAtUtc:
+          type: string
+          format: date-time
+    Pauses:
+      type: object
+      required: [transfer, mint, burn]
+      properties:
+        transfer:
+          type: ["boolean", "null"]
+        mint:
+          type: ["boolean", "null"]
+        burn:
+          type: ["boolean", "null"]
+    CorporateAction:
+      type: object
+      required: [kind, title, detail, status]
+      properties:
+        kind:
+          type: string
+          enum: [multiplier-update, announcement, note]
+        title:
+          type: string
+        detail:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, executed, informational]
+        scheduledForUtc:
+          type: ["string", "null"]
+          format: date-time
+        txHash:
+          type: ["string", "null"]
+        uri:
+          type: ["string", "null"]
+    HistoryPoint:
+      type: object
+      required: [tUtc, referencePrice, poolPrice, premiumBps]
+      properties:
+        tUtc:
+          type: string
+          format: date-time
+        referencePrice:
+          type: number
+        poolPrice:
+          type: ["number", "null"]
+        premiumBps:
+          type: ["integer", "null"]
+        feedState:
+          $ref: "#/components/schemas/FeedState"
+    PremiumHistory:
+      type: object
+      required: [ticker, window, points, pairAddress]
+      properties:
+        ticker:
+          type: string
+        window:
+          type: string
+        pairAddress:
+          type: ["string", "null"]
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryPoint"
+    OwnershipFacts:
+      type: object
+      required: [multiplier, multiplierRaw, sharesPerToken, tokensPerShare, dividendPolicy, claimStructure, custodian, lastMultiplierChangeUtc]
+      properties:
+        multiplier:
+          type: number
+        multiplierRaw:
+          type: string
+        sharesPerToken:
+          type: number
+        tokensPerShare:
+          type: number
+        dividendPolicy:
+          type: string
+        claimStructure:
+          type: string
+        custodian:
+          type: string
+        lastMultiplierChangeUtc:
+          type: ["string", "null"]
+          format: date-time
+    Metadata:
+      type: object
+      required: [isin, cusip, contractUri]
+      properties:
+        isin:
+          type: ["string", "null"]
+        cusip:
+          type: ["string", "null"]
+        contractUri:
+          type: ["string", "null"]
+    Verification:
+      type: object
+      required: [verified, address, addressIsB20, matchedOfficialList, checks, statement]
+      properties:
+        verified:
+          type: boolean
+        address:
+          type: string
+        addressIsB20:
+          type: boolean
+          description: Address carries the B20 precompile prefix. Note that lookalikes can too — only the official list proves issuance.
+        matchedOfficialList:
+          type: boolean
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Check"
+        statement:
+          type: string
+    PriceFacts:
+      type: object
+      required: [reference, primaryVenue, premiumBps, premiumPct, deviationState, statement, thresholdsBps]
+      properties:
+        reference:
+          $ref: "#/components/schemas/FeedReading"
+        primaryVenue:
+          oneOf:
+            - $ref: "#/components/schemas/VenueQuote"
+            - type: "null"
+        premiumBps:
+          type: ["integer", "null"]
+        premiumPct:
+          type: ["number", "null"]
+        deviationState:
+          $ref: "#/components/schemas/DeviationState"
+        statement:
+          type: string
+        thresholdsBps:
+          type: object
+          required: [fair, elevated]
+          properties:
+            fair:
+              type: integer
+            elevated:
+              type: integer
+    Supply:
+      type: object
+      required: [totalSupply, shareEquivalents, floatUsd, holdersNote]
+      properties:
+        totalSupply:
+          type: number
+        shareEquivalents:
+          type: number
+        floatUsd:
+          type: ["number", "null"]
+        holdersNote:
+          type: string
+    StockLabel:
+      type: object
+      required: [summary, verify, price, own, supply, venues, pauses, metadata, corporateActions, disclosures, history, blockNumber, updatedAtUtc, shareText]
+      properties:
+        summary:
+          $ref: "#/components/schemas/StockSummary"
+        verify:
+          $ref: "#/components/schemas/Verification"
+        price:
+          $ref: "#/components/schemas/PriceFacts"
+        own:
+          $ref: "#/components/schemas/OwnershipFacts"
+        supply:
+          $ref: "#/components/schemas/Supply"
+        venues:
+          type: array
+          items:
+            $ref: "#/components/schemas/VenueQuote"
+        pauses:
+          $ref: "#/components/schemas/Pauses"
+        metadata:
+          $ref: "#/components/schemas/Metadata"
+        corporateActions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CorporateAction"
+        disclosures:
+          type: array
+          items:
+            type: string
+        history:
+          type: array
+          description: Recent premium history (last 24h, sampled) for sparklines.
+          items:
+            $ref: "#/components/schemas/HistoryPoint"
+        blockNumber:
+          type: integer
+        updatedAtUtc:
+          type: string
+          format: date-time
+        shareText:
+          type: string
+          description: Ready-to-post neutral summary for X/Farcaster.
+    SizeCheck:
+      type: object
+      required: [ticker, amountUsd, side, pairAddress, dexLabel, liquidityUsd, shareOfLiquidityPct, estimatedImpactBps, currentPremiumBps, estimatedAllInVsReferenceBps, tokensApprox, method, note]
+      properties:
+        ticker:
+          type: string
+        amountUsd:
+          type: number
+        side:
+          type: string
+          enum: [buy, sell]
+        pairAddress:
+          type: string
+        dexLabel:
+          type: string
+        liquidityUsd:
+          type: number
+        shareOfLiquidityPct:
+          type: number
+        estimatedImpactBps:
+          type: integer
+          description: Constant-product price-impact estimate using the venue's total USD liquidity. An approximation, not a guaranteed bound — concentrated pools do better in range and worse out of range.
+        currentPremiumBps:
+          type: ["integer", "null"]
+        estimatedAllInVsReferenceBps:
+          type: ["integer", "null"]
+          description: Signed estimate of the executed price versus the reference for this size — premium + impact for buys, premium − impact for sells. Null when the venue is not USD-comparable.
+        tokensApprox:
+          type: number
+        method:
+          type: string
+        note:
+          type: string
+    CheckKind:
+      type: string
+      enum: [coinbase-stock, lookalike-b20, other-token, pool, invalid, not-found]
+    CheckVerdict:
+      type: string
+      enum: [verified, caution, danger, info]
+    CheckedToken:
+      type: object
+      required: [address, name, symbol, decimals, isB20, prefixLooksOfficial, matchedTicker, totalSupply]
+      properties:
+        address:
+          type: string
+        name:
+          type: ["string", "null"]
+        symbol:
+          type: ["string", "null"]
+        decimals:
+          type: ["integer", "null"]
+        isB20:
+          type: boolean
+        prefixLooksOfficial:
+          type: boolean
+          description: Address begins with the 0xB200… B20 prefix that all Coinbase stocks share — and that anyone can also obtain.
+        matchedTicker:
+          type: ["string", "null"]
+        totalSupply:
+          type: ["number", "null"]
+        resemblesTicker:
+          type: ["string", "null"]
+          description: Official ticker this token's name or symbol imitates, if any.
+    CheckedPool:
+      type: object
+      required: [pairAddress, dex, dexLabel, url, baseToken, quoteToken, priceUsd, liquidityUsd, matchedTicker, referencePrice, premiumBps, deviationState]
+      properties:
+        pairAddress:
+          type: string
+        dex:
+          type: string
+        dexLabel:
+          type: string
+        url:
+          type: string
+        baseToken:
+          $ref: "#/components/schemas/TokenRef"
+        quoteToken:
+          $ref: "#/components/schemas/TokenRef"
+        priceUsd:
+          type: number
+        liquidityUsd:
+          type: number
+        volume24hUsd:
+          type: number
+        matchedTicker:
+          type: ["string", "null"]
+        referencePrice:
+          type: ["number", "null"]
+        premiumBps:
+          type: ["integer", "null"]
+        deviationState:
+          $ref: "#/components/schemas/DeviationState"
+    CheckResult:
+      type: object
+      required: [input, kind, verdict, headline, details, checks, token, pool, stockTicker]
+      properties:
+        input:
+          type: string
+        kind:
+          $ref: "#/components/schemas/CheckKind"
+        verdict:
+          $ref: "#/components/schemas/CheckVerdict"
+        headline:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Check"
+        token:
+          oneOf:
+            - $ref: "#/components/schemas/CheckedToken"
+            - type: "null"
+        pool:
+          oneOf:
+            - $ref: "#/components/schemas/CheckedPool"
+            - type: "null"
+        stockTicker:
+          type: ["string", "null"]
+          description: If the input resolves to an official stock, its ticker (link target for the full label).
+    Position:
+      type: object
+      required: [ticker, name, address, rawBalance, shareEquivalents, multiplier, referencePrice, valueUsd, feedState]
+      properties:
+        ticker:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        rawBalance:
+          type: number
+        shareEquivalents:
+          type: number
+        multiplier:
+          type: number
+        referencePrice:
+          type: number
+        valueUsd:
+          type: number
+        feedState:
+          $ref: "#/components/schemas/FeedState"
+    Portfolio:
+      type: object
+      required: [account, basename, positions, totalValueUsd, totalShareEquivalents, note, updatedAtUtc]
+      properties:
+        account:
+          type: string
+        basename:
+          type: ["string", "null"]
+        positions:
+          type: array
+          description: Only tokens with a non-zero balance.
+          items:
+            $ref: "#/components/schemas/Position"
+        totalValueUsd:
+          type: number
+        totalShareEquivalents:
+          type: number
+        note:
+          type: string
+        updatedAtUtc:
+          type: string
+          format: date-time
+    IntegrityAlert:
+      type: object
+      required: [severity, ticker, title, detail, address, pairAddress]
+      properties:
+        severity:
+          type: string
+          enum: [info, caution, danger]
+        ticker:
+          type: ["string", "null"]
+        title:
+          type: string
+        detail:
+          type: string
+        address:
+          type: ["string", "null"]
+        pairAddress:
+          type: ["string", "null"]
+    FeedCounts:
+      type: object
+      required: [live, held, stale, unavailable]
+      properties:
+        live:
+          type: integer
+        held:
+          type: integer
+        stale:
+          type: integer
+        unavailable:
+          type: integer
+    Overview:
+      type: object
+      required: [market, snapshotAtUtc, blockNumber, tokensTotal, tokensLive, floatUsd, liquidityUsd, volume24hUsd, feeds, dislocations, alerts, disclosures, dataSources]
+      properties:
+        market:
+          $ref: "#/components/schemas/MarketStatus"
+        snapshotAtUtc:
+          type: string
+          format: date-time
+        blockNumber:
+          type: integer
+        tokensTotal:
+          type: integer
+        tokensLive:
+          type: integer
+        floatUsd:
+          type: number
+        liquidityUsd:
+          type: number
+        volume24hUsd:
+          type: number
+        feeds:
+          $ref: "#/components/schemas/FeedCounts"
+        dislocations:
+          type: array
+          description: Stocks ordered by absolute premium, largest first.
+          items:
+            $ref: "#/components/schemas/StockSummary"
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/IntegrityAlert"
+        disclosures:
+          type: array
+          items:
+            type: string
+        dataSources:
+          type: array
+          items:
+            type: string
