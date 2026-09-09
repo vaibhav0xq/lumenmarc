@@ -14,7 +14,7 @@ import { findStockByAddress, findStockByTicker, type StockDefinition } from "../
 import { buildLabel, fmtCompactUsd, type ComputedSnapshot, type ComputedStock } from "../lib/label/engine";
 import { DatabaseNotConfiguredError } from "@workspace/db";
 import { historyFor } from "../lib/snapshot/worker";
-import { cacheFor, isZodError, param, publicAppUrl, requireSnapshot, sendError } from "./_shared";
+import { cacheFor, isZodError, param, publicAppUrl, requireQuery, requireSnapshot, sendError } from "./_shared";
 
 const router: IRouter = Router();
 
@@ -74,6 +74,7 @@ router.get("/stocks/:ticker", async (req, res): Promise<void> => {
 });
 
 router.get("/history", async (req, res): Promise<void> => {
+  if (!requireQuery(req, res, "ticker")) return;
   let query;
   try {
     query = GetStockHistoryQueryParams.parse(req.query);
@@ -114,6 +115,7 @@ router.get("/history", async (req, res): Promise<void> => {
 });
 
 router.get("/size-check", async (req, res): Promise<void> => {
+  if (!requireQuery(req, res, "ticker", "amountUsd")) return;
   let query;
   try {
     query = GetSizeCheckQueryParams.parse(req.query);

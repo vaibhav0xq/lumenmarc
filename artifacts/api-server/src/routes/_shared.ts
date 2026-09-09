@@ -39,6 +39,19 @@ export function isZodError(err: unknown): err is ZodLikeError {
   return typeof err === "object" && err !== null && Array.isArray((err as { issues?: unknown }).issues);
 }
 
+/**
+ * The generated query schemas use `zod.coerce.string()`, which turns an absent parameter into the
+ * literal string "undefined" instead of failing validation. Call this before parsing so a missing
+ * required parameter is a 400, not a lookup for a token called "undefined".
+ * Replies 400 and returns false when any of `names` is absent from the query string.
+ */
+export function requireQuery(req: Request, res: Response, ...names: string[]): boolean {
+  const missing = names.filter((name) => req.query[name] === undefined);
+  if (missing.length === 0) return true;
+  sendError(res, 400, missing.map((name) => `${name}: Required`).join("; "), "bad_request");
+  return false;
+}
+
 export function publicAppUrl(req: Request): string {
   const configured = process.env["PUBLIC_APP_URL"]?.trim();
   if (configured) return configured.replace(/\/$/, "");

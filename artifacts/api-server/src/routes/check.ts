@@ -19,7 +19,7 @@ import {
   type ComputedStock,
 } from "../lib/label/engine";
 import { dexLabel, pairByAddress, type DsPair } from "../lib/venues/dexscreener";
-import { isZodError, requireSnapshot, sendError } from "./_shared";
+import { isZodError, requireQuery, requireSnapshot, sendError } from "./_shared";
 
 const router: IRouter = Router();
 
@@ -260,6 +260,7 @@ class UpstreamUnavailable extends Error {
 }
 
 router.get("/check", async (req, res): Promise<void> => {
+  if (!requireQuery(req, res, "q")) return;
   let q: string;
   try {
     q = CheckAddressQueryParams.parse(req.query).q.trim();
