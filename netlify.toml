@@ -1,0 +1,35 @@
+# LumenMarc on Netlify: the Vite front end as static files, the Express API as one Netlify Function.
+# Mirrors vercel.json + scripts/vercel-build.mjs. Details: docs/DEPLOY_NETLIFY.md
+
+[build]
+  command = "pnpm run build:netlify"
+  publish = "artifacts/lumenmarc/dist/public"
+
+[build.environment]
+  # Build and functions runtime (Netlify runs functions on the build's Node major).
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  included_files = ["netlify/functions/api/*"]
+
+# /api/* -> the function. Express receives the original /api path.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback for client routes (/readings, /check, /portfolio/:account, /s/:ticker, /embed/:ticker ...).
+# Not forced, so real files (index.html, assets, favicon) are still served directly.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Hashed Vite assets are immutable.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

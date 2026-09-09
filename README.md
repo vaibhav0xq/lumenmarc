@@ -14,7 +14,7 @@ Everything is computed from public onchain and public API data. There is no wall
 
 Built for the **Base Build "Builder Quest" for Tokenized Stocks** (September 2026) by **[vaibhav0xq](https://github.com/vaibhav0xq)**.
 
-Repository: [github.com/vaibhav0xq/lumenmarc](https://github.com/vaibhav0xq/lumenmarc) · Deployment guide: [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md) · License: MIT
+Repository: [github.com/vaibhav0xq/lumenmarc](https://github.com/vaibhav0xq/lumenmarc) · Deployment guides: [Netlify](docs/DEPLOY_NETLIFY.md), [Vercel](docs/DEPLOY_VERCEL.md) · License: MIT
 
 ---
 
@@ -184,11 +184,12 @@ No API keys are required for anything in this repository. A keyed Base RPC only 
 
 ## Deploying
 
-The project is set up for **Vercel** (static front end + one serverless function for `/api`). Import the repo, add the environment variables and deploy. The full walkthrough, the environment-variable table and how history behaves on serverless are in **[docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md)**.
+The project is set up for **Netlify** and **Vercel** (static front end + one serverless function for `/api` on either). Import the repo, add the environment variables and deploy. The walkthroughs, the environment-variable table and how history behaves on serverless are in **[docs/DEPLOY_NETLIFY.md](docs/DEPLOY_NETLIFY.md)** and **[docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md)**.
 
 ```bash
+pnpm run build:netlify           # reproduces the Netlify build locally → artifacts/lumenmarc/dist/public + netlify/functions/api
 pnpm run build:vercel            # reproduces the Vercel build locally → .vercel/output/
-node scripts/vercel-serve.mjs    # serves that output on http://localhost:3000
+node scripts/vercel-serve.mjs    # serves the Vercel output on http://localhost:3000
 ```
 
 Any Node host works too: `pnpm --filter @workspace/api-server run build` produces `dist/index.mjs` (listens on `PORT`, keeps the background refresh loop) and `BASE_PATH=/ pnpm --filter @workspace/lumenmarc run build` produces the static site in `artifacts/lumenmarc/dist/public`.

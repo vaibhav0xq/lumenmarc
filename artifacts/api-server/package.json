@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build:vercel": "node ./build.mjs --vercel"
+    "build:vercel": "node ./build.mjs --vercel",
+    "build:netlify": "node ./build.mjs --netlify"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
@@ -19,6 +20,7 @@
     "express": "^5.2.1",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
+    "serverless-http": "^4.0.0",
     "viem": "^2.56.3"
   },
   "devDependencies": {

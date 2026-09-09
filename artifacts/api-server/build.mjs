@@ -10,22 +10,34 @@ globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
-// `node build.mjs`          -> dist/index.mjs        (long-running server: listens on PORT, background worker)
-// `node build.mjs --vercel` -> dist-vercel/index.mjs (serverless handler: no listen, on-demand snapshots)
-const target = process.argv.includes("--vercel") ? "vercel" : "server";
+// `node build.mjs`           -> dist/index.mjs         (long-running server: listens on PORT, background worker)
+// `node build.mjs --vercel`  -> dist-vercel/vercel.mjs   (serverless handler: no listen, on-demand snapshots)
+// `node build.mjs --netlify` -> dist-netlify/netlify.js  (Lambda-style handler via serverless-http, on-demand snapshots)
+//
+// The Netlify target is CommonJS (.js, no "type": "module" next to the function): Netlify re-bundles v1 functions to
+// CommonJS with its own esbuild pass, which would empty the `import.meta.url` in the ESM banner below. Emitting
+// CommonJS directly needs no banner at all.
+const target = process.argv.includes("--vercel") ? "vercel" : process.argv.includes("--netlify") ? "netlify" : "server";
+const serverless = target !== "server";
+const format = target === "netlify" ? "cjs" : "esm";
+
+const entryByTarget = { server: "src/index.ts", vercel: "src/vercel.ts", netlify: "src/netlify.ts" };
 
 async function buildAll() {
-  const distDir = path.resolve(artifactDir, target === "vercel" ? "dist-vercel" : "dist");
+  const distDir = path.resolve(artifactDir, target === "server" ? "dist" : `dist-${target}`);
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, target === "vercel" ? "src/vercel.ts" : "src/index.ts")],
+    entryPoints: [path.resolve(artifactDir, entryByTarget[target])],
     platform: "node",
     bundle: true,
-    format: "esm",
+    format,
     outdir: distDir,
-    outExtension: { ".js": ".mjs" },
+    outExtension: format === "cjs" ? {} : { ".js": ".mjs" },
     logLevel: "info",
+    // Vercel sets NODE_ENV=production on the function at runtime; Netlify's functions runtime leaves it
+    // unset, so it is fixed at bundle time there (production logger, no pino-pretty transport).
+    ...(target === "netlify" ? { define: { "process.env.NODE_ENV": '"production"' } } : {}),
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:
@@ -105,13 +117,13 @@ async function buildAll() {
       "puppeteer-core",
       "electron",
     ],
-    sourcemap: target === "vercel" ? false : "linked",
+    sourcemap: serverless ? false : "linked",
     plugins: [
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })
     ],
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
-    banner: {
+    banner: format === "esm" ? {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';
 import __bannerUrl from 'node:url';
@@ -120,7 +132,7 @@ globalThis.require = __bannerCrReq(import.meta.url);
 globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
-    },
+    } : undefined,
   });
 }
 
