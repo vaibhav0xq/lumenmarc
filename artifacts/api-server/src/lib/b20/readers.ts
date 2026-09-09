@@ -135,7 +135,7 @@ export async function readChainSnapshot(): Promise<ChainSnapshot> {
         const v = ok(r[11] as MulticallResult<boolean>);
         return typeof v === "boolean" ? v : null;
       })(),
-      ok: r[1]?.status === "success" && r[2]?.status === "success",
+      ok: r[0]?.status === "success" && r[1]?.status === "success" && r[2]?.status === "success",
     });
   });
 

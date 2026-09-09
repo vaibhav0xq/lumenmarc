@@ -1,3 +1,7 @@
+@import '@fontsource-variable/inter/opsz.css';
+@import '@fontsource-variable/newsreader/opsz.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
@@ -45,66 +49,74 @@
   --color-dev-dislocated: hsl(var(--dev-dislocated));
   --color-dev-unpriced: hsl(var(--dev-unpriced));
 
-  --color-cyan-glow: hsl(var(--cyan-glow));
+  --color-base-blue: hsl(var(--base-blue));
+  /* Legacy alias kept only so older screens keep compiling until they are restyled. */
+  --color-cyan-glow: hsl(var(--base-blue));
 
-  --font-sans: 'Geist', sans-serif;
-  --font-mono: 'Geist Mono', monospace;
-  --font-serif: 'Instrument Serif', serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* The comparator's own inks, for places that draw rather than theme. */
+  --color-ivory: #ece7da;
+  --color-lamp: #fff5e4;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+
+  --shadow-plate: 0 0 0 1px hsl(var(--border));
 }
 
-:root, .dark {
-  /* Extremely dark navy base for cinematic effect */
-  --background: 225 30% 4%;
-  --foreground: 210 40% 98%;
+:root {
+  /* A dark bench, one ivory ink, one blue needle. Structure comes from hairlines, never shadows. */
+  --background: 220 23% 5%;
+  --foreground: 43 32% 89%;
 
-  --card: 225 30% 6%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 225 20% 12%;
+  --card: 223 15% 9%;
+  --card-foreground: 43 32% 89%;
+  --card-border: 210 3% 17%;
 
-  --popover: 225 30% 6%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 225 20% 12%;
+  --popover: 223 15% 9%;
+  --popover-foreground: 43 32% 89%;
+  --popover-border: 210 3% 17%;
 
-  --border: 225 20% 16%;
-  --input: 225 20% 16%;
-  --ring: 221 100% 50%; /* Base blue */
+  --border: 210 3% 17%;
+  --input: 0 0% 24%;
+  --ring: 223 100% 65%;
 
-  /* Base Blue */
-  --primary: 221 100% 50%;
-  --primary-foreground: 0 0% 100%;
+  /* The needle blue (#4C7DFF) is the single accent. */
+  --primary: 223 100% 65%;
+  --primary-foreground: 220 23% 5%;
 
-  /* Darker surface for contrast */
-  --secondary: 225 20% 10%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 223 15% 9%;
+  --secondary-foreground: 43 32% 89%;
 
-  --muted: 225 20% 12%;
-  --muted-foreground: 215 20% 65%;
+  --muted: 223 15% 9%;
+  --muted-foreground: 47 4% 57%;
 
-  --accent: 188 86% 53%; /* Cyan for luminous accents */
-  --accent-foreground: 0 0% 100%;
+  --accent: 223 100% 65%;
+  --accent-foreground: 220 23% 5%;
 
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 4 74% 60%;
+  --destructive-foreground: 220 23% 5%;
 
-  /* Status Colors */
-  --feed-live: 152 69% 31%; /* Mint */
-  --feed-held: 215 20% 65%; /* Slate */
-  --feed-stale: 38 92% 50%; /* Amber */
-  --feed-unavailable: 0 84% 60%; /* Coral */
+  /* Feed states */
+  --feed-live: 157 55% 48%;
+  --feed-held: 47 4% 57%;
+  --feed-stale: 35 80% 60%;
+  --feed-unavailable: 4 74% 62%;
 
-  --dev-fair: 152 69% 31%; /* Mint */
-  --dev-elevated: 38 92% 50%; /* Amber */
-  --dev-dislocated: 0 84% 60%; /* Coral */
-  --dev-unpriced: 215 20% 65%; /* Slate */
-  
-  --cyan-glow: 188 86% 53%;
+  /* Deviation states, used only on the figure they qualify. */
+  --dev-fair: 157 55% 48%;
+  --dev-elevated: 35 80% 60%;
+  --dev-dislocated: 4 74% 62%;
+  --dev-unpriced: 47 4% 57%;
 
-  --radius: 0.25rem;
+  --base-blue: 223 100% 65%;
+
+  --radius: 2px;
 }
 
 @layer base {
@@ -112,26 +124,118 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
+    scroll-padding-top: 5rem;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+
+  /* Every interactive thing eases the same way: colour, border, underline and opacity over 240 ms, nothing bounces. */
+  a, button, [role="button"], input, select, textarea, summary, [tabindex]:not([tabindex="-1"]) {
+    transition-property: color, background-color, border-color, opacity, text-decoration-color, text-underline-offset, transform;
+    transition-duration: 240ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   body {
-    @apply font-sans antialiased bg-background text-foreground selection:bg-primary selection:text-primary-foreground;
+    @apply font-sans bg-background text-foreground selection:bg-primary/25 selection:text-foreground;
+  }
+
+  h1, h2, h3 {
+    @apply font-display font-normal tracking-[-0.01em];
+    text-wrap: balance;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Focus is drawn in ink, one hairline out, the way the rest of the instrument is drawn. */
+  :focus-visible {
+    outline: 1px solid hsl(var(--foreground) / 0.8);
+    outline-offset: 3px;
+  }
+
+  ::placeholder {
+    color: hsl(var(--foreground) / 0.48);
   }
 }
 
-/* Utilities for tabular numbers */
-.tabular-nums {
+/* Numerals line up in columns everywhere they are compared. */
+.tnum {
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'cv11' 1;
 }
 
-/* Subtle grain overlay for cinematic feel */
-.bg-grain {
-  position: relative;
+
+/* Thin ivory scrollbars inside the instrument columns. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 231, 218, 0.18) transparent;
 }
-.bg-grain::before {
+.scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgba(236, 231, 218, 0.18); }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+/* Horizontal token rail on mobile: momentum scroll, snapping, no scrollbar. */
+.rail {
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.rail::-webkit-scrollbar { display: none; }
+.rail > * { scroll-snap-align: center; }
+
+/*
+ * The instrument stage material: a soft luminance field that lifts the centre of the stage a few
+ * steps above the page and a fine film grain over it. Light on a surface, not a glow: the field is
+ * near-monochrome, never coloured, and reads as the dark lacquer the dial sits in.
+ */
+.stage-field {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 72% 64% at 50% 48%, rgba(236, 231, 218, 0.055) 0%, rgba(236, 231, 218, 0.018) 42%, rgba(236, 231, 218, 0) 72%),
+    #0c0e13;
+}
+.stage-field::before {
   content: "";
-  position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.02;
-  z-index: 50;
+  opacity: 0.16;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.9 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  background-size: 160px 160px;
+}
+.stage-field > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Interactive surfaces share one hover grammar: colour and border move, nothing jumps. */
+.hover-quiet {
+  transition-property: color, background-color, border-color, opacity;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Anchored sections stop clear of the sticky header. */
+:where([id]) {
+  scroll-margin-top: 4.5rem;
 }

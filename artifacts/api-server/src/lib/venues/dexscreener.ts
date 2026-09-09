@@ -85,7 +85,10 @@ export async function pairsForToken(address: string): Promise<DsPair[]> {
   return onlyBase(data);
 }
 
-/** Look up one pool by its pair address (or Uniswap v4 pool id). */
+/**
+ * Look up one pool by its pair address (or Uniswap v4 pool id). Null means DexScreener answered and knows
+ * no such pair; an upstream failure throws so callers never mistake an outage for "no pool".
+ */
 export async function pairByAddress(pairAddress: string): Promise<DsPair | null> {
   try {
     const data = await getJson<{ pairs?: DsPair[] | null }>(`/latest/dex/pairs/${CHAIN}/${pairAddress}`, 20_000);
@@ -93,7 +96,7 @@ export async function pairByAddress(pairAddress: string): Promise<DsPair | null>
     return pairs[0] ?? null;
   } catch (err) {
     logger.warn({ err, pairAddress }, "DexScreener pair lookup failed");
-    return null;
+    throw err;
   }
 }
 

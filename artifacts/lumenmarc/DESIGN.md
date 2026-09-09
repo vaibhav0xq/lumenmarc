@@ -1,59 +1,65 @@
+> Phase 1 design notes, kept for history. The approved and shipped visual system is described in `docs/design/instrument-style.md`.
+
 # LumenMarc Design System (Phase 1)
 
-**Concept**: A precision optical instrument in a dark observatory. The signature visual is "The Reference Line" — a luminous cyan horizon that represents the Chainlink reference price, with onchain pool prices measured against it.
+**Concept**: "The Instrument". A precision optical instrument. The signature visual is "The Reference Line" — a luminous cyan horizon that represents the Chainlink reference price, with onchain pool prices measured against it. Pages are built like an instrument's spec sheet: numbered sections, hairline rules, rails, and readouts. Never a grid of cards.
 
 ## Tokens & Theme
 
 **Fonts**:
 - UI & Headings: `Geist` (`--font-sans`)
-- Numbers & Monospaced: `Geist Mono` (`--font-mono`)
+- Numbers & Monospaced: `Geist Mono` (`--font-mono`), `tabular-nums`
 - Emphasized Hero Typography: `Instrument Serif` (`--font-serif`)
 
 **Colors (HSL)**:
 - Background: `225 30% 4%` (Extremely dark cinematic navy)
-- Primary/Accents: Base Blue (`221 100% 50%`) and Cyan Glow (`188 86% 53%`)
-- Deviation States:
-  - `fair`: Mint (`152 69% 31%`)
-  - `elevated`: Amber (`38 92% 50%`)
-  - `dislocated`: Coral (`0 84% 60%`)
-  - `unpriced`: Slate (`215 20% 65%`)
-- Feed States: matched mapping (live = mint, held = slate, stale = amber, unavailable = coral)
+- Base Blue: `221 100% 50%`
+- Primary/Cyan Glow: `188 86% 53%`
+- Status (Deviation & Feeds):
+  - `fair` / `live`: Mint (`152 69% 31%`)
+  - `elevated` / `stale`: Amber (`38 92% 50%`)
+  - `dislocated` / `unavailable`: Coral (`0 84% 60%`)
+  - `unpriced` / `held`: Slate (`215 20% 65%`)
+
+**Surfaces (Tiers)**:
+- **Plate** (`.surface-plate`): Base tier. Near-transparent fill, hairline border, 1px inner top highlight, machined-metal feel.
+- **Glass** (`.surface-glass`): Floating tier. Blurred, reserved for sticky bars, tooltips, and the mobile drawer.
 
 ## Shared Components
 
 1. **`MarketMarquee`** (`src/components/layout/market-marquee.tsx`)
-   - Animated ticker showing live premiums.
-   - Used globally in the `Shell`.
+   - Animated ticker showing live premiums. Reduced-motion aware.
+   - Sits flush beneath the Navbar.
 
 2. **`ReferenceLineHero`** (`src/components/reference-line/reference-line-hero.tsx`)
-   - The signature visual for the home page.
+   - The instrument interface.
    - Props: `{ stocks: StockSummary[], overview: Overview | undefined }`
-   - Dynamically maps Bps onto a ±400 bps grid, drawing marks above or below the line, with `deviationState` coloring.
-   - Extremely high premiums are visually clamped at ±400 bps with a chevron indicator inside the dot.
-   - On narrow screens (mobile), labels for non-extreme dots are hidden (tap-to-reveal) to prevent collisions. Marks are ordered horizontally by premium.
+   - Dynamically maps premium Bps onto a graduated scale (±400 bps).
+   - Desktop: full-bleed horizontal beam over a perspective bench. Marks settle symmetrically.
+   - Mobile: Vertical ladder, X-axis represents premium, Y-axis stacks tokens to avoid collisions.
 
 3. **`ReferenceLineInline`** (`src/components/reference-line/reference-line-inline.tsx`)
    - Row-scale reference line mark to embed the visual identity in lists and cards.
-   - Props: `{ premiumBps: number | null, deviationState: string, size?: "sm" | "md", scaleBps?: number }`
-   - Maps the premium onto a fixed scale (default 400 bps) drawing a vertical stem and state-colored dot. Use `size="sm"` for tables and `size="md"` for large cards.
+   - Props: `{ premiumBps: number | null, deviationState: string, size?: "sm" | "md", scaleBps?: number, className?: string }`
+   - Renders a horizontal beam, fair band, vertical stem, and state-colored dot.
 
 4. **Status Badges** (`src/components/status-badges.tsx`)
-   - `FeedStateBadge({ state })`
-   - `DeviationStateBadge({ state })`
+   - `FeedStateBadge({ state, className })`
+   - `DeviationStateBadge({ state, className })`
    - `PremiumColorText({ bps, state, children })`
-   - `HealthDot({ isHealthy })`
-   - Note: The visual language uses dark transparent backgrounds with solid borders to match the cinematic vibe.
+   - `HealthDot({ isHealthy, className })`
+   - Badges use `.surface-plate` to sit flush and crisp against the dark theme.
 
 ## Motion & Interaction
-- Uses `framer-motion` for transitions.
-- Global entrance: `animate-in fade-in duration-700`.
+- `src/lib/motion.ts` exports shared Framer Motion variants (`revealBeam`, `markSettle`, `fadeUp`, `valueTick`, `pageTransition`).
+- Page transitions occur on route change via `<AnimatePresence>` in `App.tsx`.
 - Reduced motion: Always respect `useReducedMotion()`.
-- Easing: `[0.16, 1, 0.3, 1]` for smooth, physical settling motions.
+- Easing: `[0.16, 1, 0.3, 1]` for physical settling.
 
-## Notes for Phase 2
-- Phase 2 will restyle `label.tsx`, `check.tsx`, `portfolio.tsx`, and `embed.tsx`.
-- Use the shared status badges and `PremiumColorText` wherever numbers or states are shown.
-- Use `ReferenceLineInline` in the check route results, portfolio positions, and label headers to connect the pages back to the signature visual.
+## Notes for Phase 2 (Rules)
+- Phase 2 will restyle `label.tsx`, `check.tsx`, `portfolio.tsx`, `embed.tsx`, and `about.tsx`.
+- Connect all features back to the instrument theme. Avoid generic SaaS cards or grid layouts. Use sections, hairlines (`border-border/40`), and rails.
+- Use `ReferenceLineInline` in check results, portfolio positions, and label headers to connect the pages back to the signature visual.
 - Maintain the exact data-testids as requested.
-- Ensure all charts/visuals adhere to the minimal, data-first "Reference Line" aesthetic. No arbitrary charts — keep it tied to the exact numbers returned by the API hooks.
-- Use `Geist Mono` with `tabular-nums` for all dynamic data.
+- Ensure all charts/visuals adhere to the minimal, data-first "Reference Line" aesthetic. No arbitrary charts — keep it tied to the exact numbers. Null premium means "Unpriced". 
+- Data formatting must strictly use `src/lib/utils.ts` (e.g. `formatBps`, `formatUsd`, `formatEt`).

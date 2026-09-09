@@ -34,6 +34,9 @@ let lookalikesAtMs = 0;
 let timer: NodeJS.Timeout | null = null;
 let inFlight: Promise<void> | null = null;
 let previousPairs: DsPair[] = [];
+// True once DexScreener has answered at least once. Before that a venue-fetch failure fails the whole tick,
+// so the API keeps reporting 503 instead of publishing a snapshot in which every token reads "no venue".
+let venuesKnown = false;
 let persistenceNoticeLogged = false;
 
 export function getSnapshot(): ComputedSnapshot | null {
@@ -108,7 +111,7 @@ async function persist(snap: ComputedSnapshot): Promise<boolean> {
   if (!db) {
     if (!persistenceNoticeLogged) {
       persistenceNoticeLogged = true;
-      logger.warn("DATABASE_URL not set — premium history persistence is disabled");
+      logger.warn("DATABASE_URL not set; premium history persistence is disabled");
     }
     return false;
   }
@@ -152,7 +155,8 @@ async function refresh(): Promise<void> {
     const [chain, pairs] = await Promise.all([
       readChainSnapshot(),
       pairsForTokens(STOCKS.map((s) => s.address)).catch((err: unknown) => {
-        logger.warn({ err }, "DexScreener venue fetch failed — keeping previous venues if any");
+        if (!venuesKnown) throw err;
+        logger.warn({ err }, "DexScreener venue fetch failed; keeping the previous venues");
         return null;
       }),
     ]);
@@ -164,12 +168,13 @@ async function refresh(): Promise<void> {
         logger.warn({ err }, "Lookalike scan failed");
       }
     }
+    if (pairs !== null) venuesKnown = true;
     const effectivePairs = pairs ?? previousPairs;
     previousPairs = effectivePairs;
     const snap = computeSnapshot(chain, effectivePairs, lookalikes);
     current = snap;
     currentAtMs = Date.now();
-    lastError = pairs === null ? "DexScreener unavailable — venue data may be stale" : null;
+    lastError = pairs === null ? "DexScreener unavailable; venue data may be stale" : null;
     logger.info(
       {
         ms: Date.now() - startedAt,

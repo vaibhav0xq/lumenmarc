@@ -11,7 +11,7 @@ function resolveRpcUrls(): string[] {
     logger.info("Using configured BASE_RPC_URL for Base mainnet reads (public RPCs as fallback)");
     return [configured, ...PUBLIC_BASE_RPCS];
   }
-  logger.info({ rpcs: PUBLIC_BASE_RPCS }, "BASE_RPC_URL not set — using public Base RPCs (rate-limited)");
+  logger.info({ rpcs: PUBLIC_BASE_RPCS }, "BASE_RPC_URL not set; using public Base RPCs (rate-limited)");
   return PUBLIC_BASE_RPCS;
 }
 

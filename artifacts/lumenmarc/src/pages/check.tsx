@@ -1,275 +1,247 @@
-import { useLocation, Link } from "wouter";
-import { AlertCircle, CheckCircle2, ShieldAlert, FileSearch, ArrowRight, ExternalLink, Info, Search } from "lucide-react";
-import { 
-  useCheckAddress, 
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import {
   getCheckAddressQueryKey,
-  type CheckVerdict
+  getListStocksQueryKey,
+  useCheckAddress,
+  useListStocks,
+  type CheckKind,
+  type CheckVerdict,
 } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
-import { cn, formatBps, formatUsd, truncateAddress, formatNumber, apiErrorMessage } from "@/lib/utils";
-import { DeviationStateBadge, PremiumColorText } from "@/components/status-badges";
-import { ReferenceLineInline } from "@/components/reference-line/reference-line-inline";
-import { motion, useReducedMotion } from "framer-motion";
+import { apiErrorMessage, cn, formatBps, formatNumber, formatUsd, truncateAddress } from "@/lib/utils";
+import { BY_WIDTH, MiniScale } from "@/components/instrument/rail";
+import { Arrow, Figure, Reveal } from "@/components/motion";
+
+const VERDICT_WORD: Record<CheckVerdict, string> = {
+  verified: "verified",
+  caution: "caution",
+  danger: "not verified",
+  info: "result",
+};
+
+const KIND_WORD: Record<CheckKind, string> = {
+  "coinbase-stock": "Coinbase-issued stock",
+  "lookalike-b20": "lookalike B20 token",
+  "other-token": "other token",
+  pool: "liquidity pool",
+  invalid: "invalid input",
+  "not-found": "no match",
+};
 
 export default function Check() {
-  const [, setLocation] = useLocation();
-  const searchParams = new URLSearchParams(window.location.search);
-  const initialQ = searchParams.get("q") || "";
-  
-  const [inputVal, setInputVal] = useState(initialQ);
-  const [q, setQ] = useState(initialQ);
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const requested = new URLSearchParams(search).get("q") ?? "";
+  const [input, setInput] = useState(requested);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
-  const prefersReducedMotion = useReducedMotion();
+  useEffect(() => setInput(requested), [requested]);
+  useEffect(() => setEvidenceOpen(false), [requested]);
 
-  // Keep internal state in sync if URL changes
-  useEffect(() => {
-    const currentQ = new URLSearchParams(window.location.search).get("q") || "";
-    if (currentQ !== q) {
-      setQ(currentQ);
-      setInputVal(currentQ);
-    }
-  }, [window.location.search]);
+  /* Starting points come from the live list, widest gap first, so every example is a real token at this block. */
+  const { data: stocks } = useListStocks({ query: { queryKey: getListStocksQueryKey(), enabled: !requested, retry: false } });
+  const examples = stocks ? [...stocks].sort(BY_WIDTH).slice(0, 3) : [];
 
   const { data: result, isLoading, error } = useCheckAddress(
-    { q },
-    { 
-      query: { 
-        enabled: q.length > 0, 
-        queryKey: getCheckAddressQueryKey({ q }),
-        retry: false
-      } 
-    }
+    { q: requested },
+    { query: { enabled: requested.length > 0, queryKey: getCheckAddressQueryKey({ q: requested }), retry: false } },
   );
+  const hasEvidence = !!result && (result.checks.length > 0 || !!result.pool || !!result.token);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputVal.trim()) {
-      setQ(inputVal.trim());
-      setLocation(`/check?q=${encodeURIComponent(inputVal.trim())}`, { replace: true });
-    }
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const q = input.trim();
+    if (q) navigate(`/check?q=${encodeURIComponent(q)}`, { replace: true });
   };
 
   return (
-    <div className="max-w-4xl mx-auto w-full space-y-12 animate-in fade-in duration-700 pb-20 pt-8">
-      <div className="space-y-4">
-        <h1 className="font-sans text-3xl md:text-5xl tracking-tight font-bold">Verify Asset</h1>
-        <p className="text-muted-foreground font-mono text-sm max-w-xl leading-relaxed">
-          Paste any token or pool address, ticker, or Basename to check its authenticity and pricing facts.
-        </p>
-        
-        <form onSubmit={handleSubmit} className="w-full relative mt-6 max-w-2xl">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-muted-foreground" />
-          <Input 
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value)}
-            placeholder="0x... or NVDAc"
-            className="pl-12 pr-24 h-14 text-lg bg-card/50 backdrop-blur-sm border-border focus-visible:ring-1 focus-visible:ring-primary rounded-xl font-mono shadow-xl shadow-black/20 w-full"
-          />
-          <Button type="submit" size="sm" className="absolute right-2 top-1/2 -translate-y-1/2 h-10 px-6 font-semibold rounded-lg shadow-md">
-            Verify
-          </Button>
-        </form>
-      </div>
-
-      {isLoading && (
-        <div className="h-48 flex items-center justify-center border border-border/50 rounded-xl bg-card/20 shadow-inner">
-          <p className="font-mono text-muted-foreground animate-pulse flex items-center gap-3">
-            <FileSearch className="size-5" /> Analyzing onchain data...
-          </p>
-        </div>
-      )}
-
-      {error && !isLoading && (
-        <div className="p-8 border border-destructive/30 bg-destructive/10 rounded-xl text-destructive-foreground font-mono shadow-[0_0_20px_rgba(239,68,68,0.1)]">
-          <h3 className="font-bold flex items-center gap-3 mb-3 text-sm uppercase tracking-widest">
-            <AlertCircle className="size-5" /> Error resolving input
-          </h3>
-          <p className="text-sm opacity-90 leading-relaxed [overflow-wrap:anywhere] break-words">{apiErrorMessage(error, "Invalid input or network error.")}</p>
-        </div>
-      )}
-
-      {result && !isLoading && (
-        <motion.div 
-          initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="space-y-10"
-        >
-          <VerdictHeader verdict={result.verdict} headline={result.headline} details={result.details} />
-
-          {result.stockTicker && (
-            <Link href={`/s/${result.stockTicker}`} className="block">
-              <div className="p-6 border border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors rounded-xl flex items-center justify-between cursor-pointer group shadow-[0_0_15px_rgba(0,82,255,0.05)]">
-                <div>
-                  <h3 className="font-semibold text-primary font-sans text-lg tracking-tight">View Full Stock Label for {result.stockTicker}</h3>
-                  <p className="text-sm font-mono text-muted-foreground mt-1">See comprehensive pricing, liquidity, and ownership facts.</p>
-                </div>
-                <ArrowRight className="size-6 text-primary group-hover:translate-x-1.5 transition-transform" />
-              </div>
-            </Link>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {result.token && (
-              <div className="space-y-4 lg:col-span-2">
-                <h3 className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-3">
-                  Token Fingerprint
-                  <div className="h-px bg-border flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.5)]"></div>
-                </h3>
-                <div className="bg-card border border-border/50 rounded-xl p-6 font-mono text-sm shadow-xl">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-8">
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">Address</span>
-                      <a href={`https://basescan.org/address/${result.token.address}`} target="_blank" rel="noreferrer" className="text-primary hover:text-cyan-glow transition-colors flex items-center gap-2 font-medium">
-                        <span className="[overflow-wrap:anywhere] break-words">{truncateAddress(result.token.address)}</span> <ExternalLink className="size-3 shrink-0" />
-                      </a>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">Name / Symbol</span>
-                      <span className="font-medium [overflow-wrap:anywhere] break-words block">{result.token.name || "—"} / {result.token.symbol || "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">B20 Prefix</span>
-                      <span className={cn("font-medium", result.token.prefixLooksOfficial ? "text-primary" : "text-muted-foreground")}>
-                        {result.token.prefixLooksOfficial ? "Yes (0xB200...)" : "No"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">Coinbase Issuer</span>
-                      <span className={cn("font-medium", result.token.matchedTicker ? "text-feed-live" : "text-muted-foreground")}>
-                        {result.token.matchedTicker ? `Matched: ${result.token.matchedTicker}` : "Unverified"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">Token Kind</span>
-                      <span className="font-medium">{result.token.isB20 ? "Tokenized Stock (B20)" : "Standard ERC-20"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">Supply</span>
-                      <span className="font-medium tabular-nums">{result.token.totalSupply !== null ? formatNumber(result.token.totalSupply, 0) : "—"}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-xs tracking-widest block mb-1">Decimals</span>
-                      <span className="font-medium tabular-nums">{result.token.decimals !== null ? result.token.decimals : "—"}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {result.pool && (
-              <div className="space-y-4 lg:col-span-2">
-                <h3 className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-3">
-                  Pool Pricing
-                  <div className="h-px bg-border flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.5)]"></div>
-                </h3>
-                <div className="bg-card border border-border/50 rounded-xl p-6 md:p-8 font-mono text-sm space-y-6 shadow-xl">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border/30 pb-6">
-                    <div className="flex items-center gap-4">
-                      <ReferenceLineInline 
-                        premiumBps={result.pool.premiumBps} 
-                        deviationState={result.pool.deviationState} 
-                        size="md" 
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground uppercase text-[10px] tracking-widest">Premium vs Ref</span>
-                          <DeviationStateBadge state={result.pool.deviationState} />
-                        </div>
-                        <div className="text-3xl font-bold mt-1 tracking-tight">
-                          <PremiumColorText bps={result.pool.premiumBps} state={result.pool.deviationState}>
-                            {result.pool.premiumBps === null ? "Unpriced" : formatBps(result.pool.premiumBps)}
-                          </PremiumColorText>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-left md:text-right">
-                      <span className="text-muted-foreground uppercase text-[10px] tracking-widest block">Pool Price</span>
-                      <span className="text-2xl tabular-nums font-bold block mt-1">{formatUsd(result.pool.priceUsd)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <div>
-                      <span className="text-muted-foreground uppercase text-[10px] tracking-widest block mb-1.5">Venue</span>
-                      <span className="flex items-center gap-2 font-medium text-base">
-                        {result.pool.dexLabel}
-                        <a href={result.pool.url} target="_blank" rel="noreferrer" className="text-primary hover:text-cyan-glow transition-colors">
-                          <ExternalLink className="size-4" />
-                        </a>
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-[10px] tracking-widest block mb-1.5">Pair</span>
-                      <span className="font-medium text-base">{result.pool.baseToken.symbol} / {result.pool.quoteToken.symbol}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground uppercase text-[10px] tracking-widest block mb-1.5">Liquidity</span>
-                      <span className="font-medium text-base tabular-nums">{formatUsd(result.pool.liquidityUsd, 0)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+    <div className="flex w-full flex-col min-h-[100dvh]" data-testid="page-check">
+      <header className="border-b border-foreground/15">
+        <Reveal className="mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-6 px-5 py-12 sm:px-8 lg:grid-cols-12 lg:py-16 xl:px-12">
+          <p className="font-mono text-[12px] text-foreground/58 lg:col-span-2">Verify</p>
+          <div className="lg:col-span-10">
+            <h1 className="font-display text-[clamp(44px,5vw,72px)] leading-[1.02] tracking-[-0.015em] text-foreground">Verify a token.</h1>
+            <p className="mt-6 max-w-[62ch] text-[17px] leading-[1.55] text-foreground/70">
+              Read a token contract, pool address or Basename against Coinbase's published list and the current Base snapshot.
+            </p>
           </div>
+        </Reveal>
+      </header>
 
-          {result.checks.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-3">
-                Verification Checks
-                <div className="h-px bg-border flex-1 shadow-[0_1px_2px_rgba(0,0,0,0.5)]"></div>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {result.checks.map((check) => (
-                  <div key={check.id} className="p-5 bg-card border border-border/50 rounded-xl flex items-start gap-4 shadow-xl">
-                    <CheckIcon passed={check.passed} className="mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-sans font-semibold text-[15px]">{check.label}</p>
-                      <p className="text-xs font-mono text-muted-foreground mt-2 leading-relaxed opacity-90">{check.detail}</p>
-                    </div>
+      <main className="flex-1 mx-auto w-full max-w-[1600px] px-5 py-10 sm:px-8 lg:py-16 xl:px-12">
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-8 lg:col-start-3">
+            
+            <section className="flex flex-col gap-6">
+              <p className="font-mono text-[11px] text-foreground/58">01 &middot; Input</p>
+              <Reveal as="div">
+                <form onSubmit={submit} className="flex w-full border border-foreground/30 transition-colors duration-300 focus-within:border-foreground" data-testid="form-check">
+                  <input
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    placeholder="Address, ticker or Basename"
+                    aria-label="Address, ticker or Basename"
+                    className="h-14 min-w-0 flex-1 bg-transparent px-4 font-mono text-[13px] text-foreground focus:outline-none sm:px-5 sm:text-[14px]"
+                    data-testid="input-check"
+                  />
+                  <button type="submit" className="h-14 border-l border-foreground/30 bg-foreground px-6 font-mono text-[13px] text-background hover-quiet hover:bg-foreground/90 sm:px-8" data-testid="button-check">
+                    Verify
+                  </button>
+                </form>
+              </Reveal>
+              
+              {!requested && examples.length > 0 && (
+                <div className="flex flex-wrap gap-x-6 gap-y-3 font-mono text-[11px] text-foreground/58 mt-2" data-testid="check-examples">
+                  <span>Try a live token:</span>
+                  {examples.map((s) => (
+                    <Link key={s.ticker} href={`/check?q=${s.ticker}`} className="text-foreground underline underline-offset-4 hover-quiet hover:text-primary hover:underline-offset-8">
+                      {s.ticker}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {isLoading && (
+                <p className="font-mono text-[11px] text-foreground/58 mt-2 animate-pulse">reading the contract and current snapshot</p>
+              )}
+              {error && !isLoading && (
+                <div className="mt-2 border-l border-dev-dislocated pl-4" data-testid="check-error">
+                  <p className="font-mono text-[11px] text-dev-dislocated">failed</p>
+                  <p className="mt-2 break-words font-mono text-[13px] leading-[1.65] text-foreground/75">{apiErrorMessage(error)}</p>
+                </div>
+              )}
+            </section>
+
+            <section className="mt-14 flex flex-col gap-6 sm:mt-20">
+              <p className="font-mono text-[11px] text-foreground/58">02 &middot; Verdict</p>
+              {result ? (
+                <Reveal as="div" className="stage-field border border-foreground/20 p-8 sm:p-12" data-testid="check-result">
+                  <p className={cn("font-mono text-[12px]", result.verdict === "danger" ? "text-dev-dislocated" : result.verdict === "caution" ? "text-dev-elevated" : "text-foreground/60")}>
+                    {VERDICT_WORD[result.verdict]} &middot; {KIND_WORD[result.kind] ?? result.kind}
+                  </p>
+                  {error ? <p className="mt-3 font-mono text-[11.5px] text-dev-dislocated">The latest read failed. This verdict is from the last successful read: {apiErrorMessage(error)}</p> : null}
+                  <h2 className="mt-6 font-display text-[clamp(32px,4vw,44px)] leading-[1.05] tracking-[-0.01em] text-foreground">{result.headline}</h2>
+                  
+                  {result.details.length > 0 && (
+                    <ul className="mt-8 space-y-4 text-[16px] leading-[1.6] text-foreground/70">
+                      {result.details.map((detail, index) => <li key={index} className="break-words">{detail}</li>)}
+                    </ul>
+                  )}
+                  
+                  <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 font-mono text-[11.5px]">
+                    {result.stockTicker && <Link href={`/readings?t=${result.stockTicker}`} className="group text-foreground underline underline-offset-4 hover-quiet hover:text-primary hover:underline-offset-8">Read instrument <Arrow /></Link>}
+                    {result.kind === "not-found" && (result.input.startsWith("0x") || result.input.includes(".")) && <Link href={`/portfolio/${encodeURIComponent(result.input)}`} className="group text-foreground underline underline-offset-4 hover-quiet hover:text-primary hover:underline-offset-8">Read holdings <Arrow /></Link>}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </motion.div>
-      )}
-    </div>
-  );
-}
+                </Reveal>
+              ) : (
+                <div className={cn("stage-field flex h-32 items-center justify-center border border-foreground/10", error ? "opacity-70" : "opacity-30")}>
+                  <p className={cn("font-mono text-[11px]", error ? "text-dev-dislocated" : "text-foreground/58")}>{error && !isLoading ? "no verdict, the read failed" : isLoading ? "reading" : "waiting for query"}</p>
+                </div>
+              )}
+            </section>
 
-function VerdictHeader({ verdict, headline, details }: { verdict: CheckVerdict, headline: string, details: string[] }) {
-  const styles = {
-    verified: "bg-feed-live/5 border-feed-live/30 text-feed-live shadow-[inset_0_0_20px_rgba(20,184,106,0.05),0_0_15px_rgba(20,184,106,0.1)]",
-    caution: "bg-feed-stale/5 border-feed-stale/30 text-feed-stale shadow-[inset_0_0_20px_rgba(245,158,11,0.05),0_0_15px_rgba(245,158,11,0.1)]",
-    danger: "bg-destructive/5 border-destructive/30 text-destructive-foreground shadow-[inset_0_0_20px_rgba(239,68,68,0.05),0_0_15px_rgba(239,68,68,0.1)]",
-    info: "bg-secondary border-border/50 text-foreground shadow-[inset_0_0_20px_rgba(255,255,255,0.02)]"
-  };
+            <section className="mt-14 flex flex-col gap-6 sm:mt-20">
+              <p className="font-mono text-[11px] text-foreground/58">03 &middot; Evidence</p>
+              {result && !hasEvidence ? (
+                <div className="stage-field flex h-24 items-center justify-center border border-foreground/10 opacity-70">
+                  <p className="font-mono text-[11px] text-foreground/58">no token or pool evidence for this query</p>
+                </div>
+              ) : result ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setEvidenceOpen(!evidenceOpen)}
+                    aria-expanded={evidenceOpen}
+                    aria-controls="check-evidence"
+                    className="flex w-full items-center justify-between border border-foreground/20 px-6 py-4 font-mono text-[12px] text-foreground hover-quiet hover:bg-foreground/[0.035]"
+                    data-testid="button-evidence"
+                  >
+                    <span>{evidenceOpen ? "Hide evidence" : "Show evidence"}{result.checks.length > 0 ? `, ${result.checks.length} ${result.checks.length === 1 ? "check" : "checks"}` : ""}</span>
+                    <span className="text-foreground/58" aria-hidden>{evidenceOpen ? "−" : "+"}</span>
+                  </button>
 
-  const icons = {
-    verified: <CheckCircle2 className="size-10 text-feed-live drop-shadow-[0_0_12px_rgba(20,184,106,0.6)]" />,
-    caution: <AlertCircle className="size-10 text-feed-stale drop-shadow-[0_0_12px_rgba(245,158,11,0.6)]" />,
-    danger: <ShieldAlert className="size-10 text-destructive drop-shadow-[0_0_12px_rgba(239,68,68,0.6)]" />,
-    info: <FileSearch className="size-10 text-primary drop-shadow-[0_0_12px_rgba(0,82,255,0.6)]" />
-  };
+                  {evidenceOpen && (
+                    <div id="check-evidence" className="mt-6 border border-foreground/15 p-6 sm:p-10 flex flex-col gap-16 animate-in fade-in slide-in-from-top-4 duration-300">
+                      {result.checks.length > 0 && (
+                        <div>
+                          <p className="mb-6 font-mono text-[11px] text-foreground/58">Verification checks</p>
+                          <ul className="border-t border-foreground/15">
+                            {result.checks.map((check) => (
+                              <li key={check.id} className="grid grid-cols-[3rem_minmax(0,1fr)] gap-4 border-b border-foreground/15 py-4 sm:grid-cols-[3.5rem_16rem_minmax(0,1fr)] hover-quiet hover:bg-foreground/[0.035]">
+                                <span className={cn("font-mono text-[11px]", check.passed === false ? "text-dev-dislocated" : check.passed === true ? "text-foreground" : "text-foreground/52")}>
+                                  {check.passed === true ? "pass" : check.passed === false ? "fail" : "n/a"}
+                                </span>
+                                <span className="text-[14.5px] leading-[1.5] text-foreground/85">{check.label}</span>
+                                <span className="col-start-2 break-words font-mono text-[11px] leading-[1.6] text-foreground/60 sm:col-start-auto">{check.detail}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
-  return (
-    <div className={cn("p-8 rounded-xl border flex flex-col sm:flex-row gap-6 items-start sm:items-center transition-all backdrop-blur-sm", styles[verdict])}>
-      <div className="shrink-0">{icons[verdict]}</div>
-      <div className="space-y-3">
-        <h2 className="text-2xl font-bold tracking-tight font-sans">{headline}</h2>
-        <div className="space-y-1.5 text-sm opacity-90 font-mono">
-          {details.map((d, i) => <p key={i} className="[overflow-wrap:anywhere] break-words">{d}</p>)}
+                      {result.pool && (
+                        <div>
+                          <p className="mb-6 font-mono text-[11px] text-foreground/58">Resolved market</p>
+                          <div className="grid grid-cols-1 border-t border-foreground/15 sm:grid-cols-3">
+                            <Fact label="Reference" value={result.pool.referencePrice == null ? "unavailable" : <Figure value={result.pool.referencePrice} format={formatUsd} />} note={result.pool.matchedTicker ? `${result.pool.matchedTicker} Chainlink reference` : "no matched stock"} />
+                            <Fact label="Onchain" value={result.pool.premiumBps == null || result.pool.priceUsd == null ? "unpriced" : <Figure value={result.pool.priceUsd} format={formatUsd} />} note={`${result.pool.dexLabel} \u00B7 ${result.pool.baseToken.symbol}/${result.pool.quoteToken.symbol}${result.pool.premiumBps == null ? " \u00B7 not a USD quote" : ""}`} divided />
+                            <Fact label="Premium" value={result.pool.premiumBps == null ? "unpriced" : <Figure value={result.pool.premiumBps} format={formatBps} />} note={`${result.pool.deviationState} \u00B7 liquidity ${formatUsd(result.pool.liquidityUsd, 0)} \u00B7 volume ${formatUsd(result.pool.volume24hUsd, 0)}`} divided blue />
+                          </div>
+                          <MiniScale bps={result.pool.premiumBps} className="mt-8 max-w-[560px]" />
+                          <p className="mt-5 break-all font-mono text-[11px] leading-[1.6] text-foreground/58">
+                            pair {result.pool.pairAddress} &middot;{" "}
+                            <a href={result.pool.url} target="_blank" rel="noreferrer" className="group text-foreground/75 underline underline-offset-4 hover-quiet hover:text-primary hover:underline-offset-8">open pool <Arrow /></a>
+                          </p>
+                        </div>
+                      )}
+
+                      {result.token && (
+                        <div>
+                          <p className="mb-6 font-mono text-[11px] text-foreground/58">Token fingerprint</p>
+                          <dl className="grid grid-cols-1 border-t border-foreground/15 sm:grid-cols-2">
+                            <Definition label="Address">
+                              <a href={`https://basescan.org/address/${result.token.address}`} target="_blank" rel="noreferrer" className="break-all underline underline-offset-4 hover-quiet hover:text-primary hover:underline-offset-8">{result.token.address}</a>
+                            </Definition>
+                            <Definition label="Name / symbol">{result.token.name || "no name"} / {result.token.symbol || "no symbol"}</Definition>
+                            <Definition label="Coinbase list">{result.token.matchedTicker ? `matched \u00B7 ${result.token.matchedTicker}` : "not matched"}</Definition>
+                            <Definition label="B20 prefix">{result.token.prefixLooksOfficial ? "yes \u00B7 0xB200\u2026" : "no"}</Definition>
+                            <Definition label="Token kind">{result.token.isB20 ? "B20 token" : "standard ERC-20"}</Definition>
+                            <Definition label="Supply">{result.token.totalSupply == null ? "unavailable" : formatNumber(result.token.totalSupply, 4)}</Definition>
+                            <Definition label="Decimals">{result.token.decimals == null ? "unavailable" : String(result.token.decimals)}</Definition>
+                            <Definition label="Resembles ticker">{result.token.resemblesTicker ?? "none detected"}</Definition>
+                          </dl>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className={cn("stage-field flex h-24 items-center justify-center border border-foreground/10", error ? "opacity-70" : "opacity-30")}>
+                  <p className={cn("font-mono text-[11px]", error ? "text-dev-dislocated" : "text-foreground/58")}>{error && !isLoading ? "no evidence, the read failed" : isLoading ? "reading" : "waiting for query"}</p>
+                </div>
+              )}
+            </section>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-function CheckIcon({ passed, className }: { passed: boolean | null, className?: string }) {
-  if (passed === true) return <CheckCircle2 className={cn("size-5 text-feed-live", className)} />;
-  if (passed === false) return <AlertCircle className={cn("size-5 text-destructive", className)} />;
-  return <Info className={cn("size-5 text-primary", className)} />;
+function Fact({ label, value, note, divided, blue }: { label: string; value: React.ReactNode; note: string; divided?: boolean; blue?: boolean }) {
+  return (
+    <div className={cn("border-b border-foreground/15 py-6 sm:border-b-0 sm:pr-6", divided && "sm:border-l sm:pl-6")}>
+      <p className="font-mono text-[10.5px] text-foreground/52">{label}</p>
+      <p className={cn("mt-3 font-mono text-[clamp(20px,2vw,30px)] leading-none tnum", blue ? "text-primary" : "text-foreground")}>{value}</p>
+      <p className="mt-4 font-mono text-[11px] leading-[1.55] text-foreground/58">{note}</p>
+    </div>
+  );
+}
+
+function Definition({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="border-b border-foreground/15 py-4 sm:odd:pr-8 sm:even:border-l sm:even:pl-8">
+      <dt className="font-mono text-[10.5px] text-foreground/52">{label}</dt>
+      <dd className="mt-2 break-words font-mono text-[12.5px] leading-[1.6] text-foreground/80">{children}</dd>
+    </div>
+  );
 }

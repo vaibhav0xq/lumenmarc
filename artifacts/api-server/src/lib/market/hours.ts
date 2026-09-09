@@ -197,26 +197,26 @@ export function getSession(now: Date = new Date()): SessionInfo {
   let nextCloseUtc: string | null = null;
   if (holidayName) {
     state = "holiday";
-    reason = `${holidayName} — US market closed`;
+    reason = `${holidayName} · US market closed`;
   } else if (weekend) {
     state = "closed";
-    reason = "Weekend — US market closed";
+    reason = "Weekend · US market closed";
   } else if (minutes < 4 * 60) {
     state = "closed";
-    reason = "Overnight — US market closed";
+    reason = "Overnight · US market closed";
   } else if (minutes < 9 * 60 + 30) {
     state = "premarket";
-    reason = "Pre-market — regular session opens 09:30 ET";
+    reason = "Pre-market · regular session opens 09:30 ET";
   } else if (minutes < closeMinutes) {
     state = "open";
-    reason = et.dateKey in EARLY_CLOSES ? `Regular session (early close 13:00 ET — ${EARLY_CLOSES[et.dateKey]})` : "Regular session";
+    reason = et.dateKey in EARLY_CLOSES ? `Regular session (early close 13:00 ET, ${EARLY_CLOSES[et.dateKey]})` : "Regular session";
     nextCloseUtc = etWallTimeToUtc(et.year, et.month, et.day, Math.floor(closeMinutes / 60), closeMinutes % 60).toISOString();
   } else if (minutes < 20 * 60) {
     state = "afterhours";
-    reason = "After-hours — regular session closed at " + (closeMinutes === 13 * 60 ? "13:00" : "16:00") + " ET";
+    reason = "After-hours · regular session closed at " + (closeMinutes === 13 * 60 ? "13:00" : "16:00") + " ET";
   } else {
     state = "closed";
-    reason = "Evening — US market closed";
+    reason = "Evening · US market closed";
   }
   if (!calendarCovered) reason += ` (holiday calendar not maintained for ${et.year})`;
 

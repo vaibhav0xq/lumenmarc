@@ -1,138 +1,54 @@
 import { useRoute } from "wouter";
-import { 
-  useGetStock, 
-  getGetStockQueryKey
-} from "@workspace/api-client-react";
-import { formatBps, formatUsd, formatAgo, apiErrorMessage } from "@/lib/utils";
-import { ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
-import { DeviationStateBadge, FeedStateBadge, PremiumColorText } from "@/components/status-badges";
-import { ReferenceLineInline } from "@/components/reference-line/reference-line-inline";
+import { useGetStock, getGetStockQueryKey } from "@workspace/api-client-react";
+import { apiErrorMessage, DEVIATION_LABEL, formatAgo, formatBpsBare, formatEt, formatUsd, referencePrice } from "@/lib/utils";
 
 export default function Embed() {
-  const [match, params] = useRoute("/embed/:ticker");
+  const [, params] = useRoute("/embed/:ticker");
   const ticker = params?.ticker || "";
-
-  const { data: stock, isLoading, error } = useGetStock(
-    ticker,
-    { 
-      query: { 
-        enabled: !!ticker, 
-        queryKey: getGetStockQueryKey(ticker),
-        refetchInterval: 30000 
-      } 
-    }
-  );
-
-  if (isLoading) {
-    return (
-      <div className="w-full min-h-[100dvh] bg-background text-foreground flex flex-col p-4 bg-grain">
-        <div className="flex flex-col items-center gap-3 mt-8">
-          <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-mono text-xs text-muted-foreground uppercase tracking-widest">Scanning {ticker}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !stock) {
-    return (
-      <div className="w-full min-h-[100dvh] bg-background text-foreground flex flex-col p-4 bg-grain border border-border">
-        <div className="flex flex-col items-center gap-2 text-center mt-8">
-          <ShieldAlert className="size-5 text-destructive mb-1" />
-          <p className="font-mono text-xs text-destructive font-bold">Failed to load {ticker}</p>
-          <p className="font-mono text-[10px] text-muted-foreground max-w-[250px] [overflow-wrap:anywhere]">{apiErrorMessage(error, "Data unavailable")}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const baseUrl = import.meta.env.BASE_URL || "/";
-  const labelUrl = `${baseUrl}s/${stock.summary.ticker}`;
-
+  const { data: stock, isLoading, error } = useGetStock(ticker, {
+    query: { enabled: !!ticker, queryKey: getGetStockQueryKey(ticker), refetchInterval: 30000, retry: false },
+  });
+  if (isLoading) return <main className="flex h-[240px] w-[360px] max-w-[360px] items-center border border-foreground/20 bg-background p-5 font-mono text-[11px] text-foreground/58">Reading {ticker}…</main>;
+  if (error || !stock) return <main className="flex h-[240px] w-[360px] max-w-[360px] flex-col justify-center border border-foreground/20 bg-background p-5"><p className="font-display text-[26px] text-foreground">No reading.</p><p className="mt-3 font-mono text-[10px] leading-[1.5] text-dev-dislocated">{apiErrorMessage(error, "Data unavailable")}</p></main>;
+  const venue = stock.price.primaryVenue;
+  const state = stock.price.reference.state;
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
   return (
-    <div className="w-full min-h-[100dvh] bg-background text-foreground flex flex-col font-sans overflow-hidden bg-grain">
-      <div className="p-3 md:p-4 flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <a href={labelUrl} target="_blank" rel="noopener noreferrer" className="text-lg md:text-xl font-bold tracking-tight leading-none hover:text-primary transition-colors flex items-center gap-1.5">
-                {stock.summary.ticker}
-                <ExternalLink className="size-3 opacity-50 shrink-0" />
-              </a>
-              {stock.verify.verified ? (
-                <span title="Verified by Coinbase" className="shrink-0"><ShieldCheck className="size-4 text-primary" /></span>
-              ) : (
-                <span title="Unverified" className="shrink-0"><ShieldAlert className="size-4 text-destructive" /></span>
-              )}
-            </div>
-            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 truncate max-w-[150px] md:max-w-[220px]">{stock.summary.name}</p>
-          </div>
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <DeviationStateBadge state={stock.price.deviationState} />
-            <FeedStateBadge state={stock.price.reference.state} />
-          </div>
+    <main className="flex h-[240px] w-[360px] max-w-[360px] flex-col overflow-hidden border border-foreground/20 bg-background text-foreground" data-testid="embed-card">
+      <header className="flex items-start justify-between border-b border-foreground/15 px-4 py-3">
+        <div className="min-w-0">
+          <a href={`${base}/s/${stock.summary.ticker}`} target="_blank" rel="noreferrer" className="font-display text-[28px] leading-none hover:text-primary transition-colors duration-200">{stock.summary.ticker}</a>
+          <p className="mt-1.5 max-w-[210px] truncate font-mono text-[10.5px] text-foreground/70">{stock.summary.name}</p>
         </div>
-
-        {/* Content */}
-        <div className="flex items-center gap-3">
-          {/* Visual line */}
-          <div className="shrink-0 flex items-center gap-1.5">
-             <span className="text-[9px] font-mono font-bold text-muted-foreground uppercase tracking-widest leading-none shrink-0">REF</span>
-             <ReferenceLineInline 
-                premiumBps={stock.price.premiumBps} 
-                deviationState={stock.price.deviationState} 
-                size="md" 
-                className="w-16 md:w-20"
-             />
-          </div>
-          
-          <div className="flex-1 grid grid-cols-2 gap-x-2 gap-y-1 items-center">
-            <div className="space-y-1">
-              <p className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground">Reference</p>
-              <p className="text-sm md:text-base font-mono leading-none tabular-nums font-semibold">
-                {formatUsd(stock.price.reference.price)}
-              </p>
-            </div>
-            <div className="space-y-1 text-right">
-              <p className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground">Pool Price</p>
-              <p className="text-sm md:text-base font-mono leading-none tabular-nums font-semibold">
-                {stock.price.primaryVenue ? formatUsd(stock.price.primaryVenue.priceUsd) : "Unpriced"}
-              </p>
-            </div>
-          </div>
+        <p className="text-right font-mono text-[9.5px] leading-[1.5] text-foreground/58">Coinbase-issued<br/>address verified</p>
+      </header>
+      <div className="grid flex-1 grid-cols-2">
+        <div className="border-r border-foreground/15 px-4 py-3">
+          <p className="font-mono text-[9.5px] text-foreground/52">Reference</p>
+          <p className="mt-1.5 font-mono text-[19px] leading-none text-foreground tnum">{referencePrice(stock.price.reference) != null ? formatUsd(stock.price.reference.price) : "Unavailable"}</p>
+          <p className="mt-1.5 font-mono text-[9.5px] leading-[1.4] text-foreground/58">{state}{state === "held" ? ` · ${formatEt(stock.price.reference.updatedAtUtc, "time")}` : ` · ${formatAgo(stock.price.reference.updatedAtUtc)}`}</p>
         </div>
-        
-        {/* Details row */}
-        <div className="flex items-center justify-between pt-2 border-t border-border/40">
-           <div className="text-[10px] font-mono text-muted-foreground tabular-nums flex items-center gap-1">
-             <div className="size-1.5 rounded-full bg-feed-live/50"></div>
-             {formatAgo(stock.updatedAtUtc)}
-           </div>
-           <div className="text-right">
-            {stock.price.premiumBps !== null ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-mono font-bold text-muted-foreground uppercase tracking-widest leading-none">PREM</span>
-                <PremiumColorText bps={stock.price.premiumBps} state={stock.price.deviationState}>
-                  <span className="font-mono text-xs md:text-sm font-bold tabular-nums">
-                    {formatBps(stock.price.premiumBps)}
-                  </span>
-                </PremiumColorText>
-              </div>
-            ) : (
-              <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest">Unpriced</span>
-            )}
-           </div>
+        <div className="px-4 py-3">
+          <p className="truncate font-mono text-[9.5px] text-foreground/52">Pool · {venue?.dexLabel ?? "no venue"}</p>
+          <p className="mt-1.5 font-mono text-[19px] leading-none text-foreground tnum">{venue && stock.price.premiumBps != null && venue.priceUsd != null ? formatUsd(venue.priceUsd) : "Unpriced"}</p>
+          <p className="mt-1.5 font-mono text-[9.5px] text-foreground/58">{venue ? `${venue.baseToken.symbol}/${venue.quoteToken.symbol}${stock.price.premiumBps == null ? " · not USD" : ""}` : "no USD quote"}</p>
         </div>
       </div>
-      
-      {/* Footer attribution */}
-      <div className="bg-secondary/80 px-4 py-2.5 text-center border-y border-border/40 shrink-0">
-        <a href={labelUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1.5">
-          <div className="size-1.5 bg-primary rounded-full shadow-[0_0_6px_rgba(0,82,255,0.8)]"></div>
-          LumenMarc
-        </a>
+      <div className="flex items-center justify-between gap-3 border-t border-foreground/15 px-4 py-2.5">
+        <p className="whitespace-nowrap font-mono text-[20px] leading-none text-primary tnum" data-testid="embed-premium">
+          {stock.price.premiumBps == null ? (stock.summary.status === "no-supply" ? "no supply" : "unpriced") : `${formatBpsBare(stock.price.premiumBps)}`}
+          <span className="ml-1 text-[12px]">{stock.price.premiumBps == null ? "" : "bps"}</span>
+          <span className="ml-2 text-[11px] text-foreground/70">
+            {stock.price.premiumBps == null ? (stock.summary.status === "no-supply" ? "nothing minted" : venue ? `quoted in ${venue.quoteToken.symbol}` : "no USD pool") : DEVIATION_LABEL[stock.price.deviationState].toLowerCase()}
+          </span>
+        </p>
+        <p className="text-right font-mono text-[9px] leading-[1.4] text-foreground/58">
+          block {stock.blockNumber.toLocaleString("en-US")}
+          <br />
+          updated {formatAgo(stock.updatedAtUtc)}
+        </p>
       </div>
-    </div>
+      <footer className="border-t border-foreground/15 px-4 py-2 text-right font-mono text-[9px] text-foreground/52">LumenMarc · Built by vaibhav0xq</footer>
+    </main>
   );
 }

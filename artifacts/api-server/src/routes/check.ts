@@ -7,6 +7,8 @@ import { looksLikeBasename, resolveBasename } from "../lib/basename";
 import {
   classifyDeviation,
   counterAssetWarnings,
+  isRecognisedCounter,
+  isUsdComparableCounter,
   fmtBps,
   fmtUsd,
   premiumBpsOf,
@@ -27,9 +29,13 @@ function officialResult(input: string, stock: ComputedStock): CheckResult {
   const { def, token, summary, primary } = stock;
   const details = [
     `Address ${def.address} matches Coinbase's published list for ${def.ticker} (${def.name}).`,
-    `Reference: ${summary.reference.description} ${fmtUsd(summary.reference.price)} (${summary.reference.state}).`,
+    summary.reference.state === "unavailable"
+      ? `Reference: ${summary.reference.description} did not answer at this block (unavailable).`
+      : `Reference: ${summary.reference.description} ${fmtUsd(summary.reference.price)} (${summary.reference.state}).`,
     primary
-      ? `Primary pool: ${primary.dexLabel} ${shortAddr(primary.pairAddress)} at ${fmtUsd(primary.priceUsd)} — ${primary.premiumBps === null ? "no premium computed" : `${fmtBps(primary.premiumBps)} vs reference (${primary.deviationState})`}.`
+      ? primary.premiumBps === null || primary.priceUsd === null
+        ? `Primary pool: ${primary.dexLabel} ${shortAddr(primary.pairAddress)}, quoted in ${primary.quoteToken.symbol}${primary.quoteToken.isStablecoin ? "" : " (not a USD stablecoin)"}: no premium is computed and no converted price is shown.`
+        : `Primary pool: ${primary.dexLabel} ${shortAddr(primary.pairAddress)} at ${fmtUsd(primary.priceUsd)}: ${fmtBps(primary.premiumBps)} vs reference (${primary.deviationState}).`
       : token.totalSupply > 0
         ? "No pool with a usable price was found."
         : "No circulating supply yet; nothing trading under this ticker today is the Coinbase token.",
@@ -89,10 +95,11 @@ function poolResult(input: string, pair: DsPair, snap: ComputedSnapshot): CheckR
   const referencePrice = stock && stock.feed.state !== "unavailable" ? stock.feed.price : null;
   const counter = matched ? (baseOfficial ? pair.quoteToken : pair.baseToken) : null;
   const counterWarnings = counter ? counterAssetWarnings(tokenRef(counter)) : [];
-  // Same rule as the label engine: a premium only exists when the counter-asset is USDC, ETH/WETH or an
-  // official stock. Anything else yields an inferred USD price that is not comparable to the reference.
-  const counterClean = counterWarnings.length === 0;
-  const premiumRaw = matched && counterClean && referencePrice !== null ? premiumBpsOf(priceUsd, referencePrice) : null;
+  // Same rule as the label engine: a premium only exists when the counter-asset is a recognised USD
+  // stablecoin. Anything else yields an inferred USD price that is not comparable to the reference.
+  const counterClean = counter ? isUsdComparableCounter(counter.address) : false;
+  const counterSuspicious = counter ? !isRecognisedCounter(counter.address) : false;
+  const premiumRaw = matched && counterClean && priceUsd > 0 && referencePrice !== null ? premiumBpsOf(priceUsd, referencePrice) : null;
   const premiumBps = premiumRaw === null ? null : Math.round(premiumRaw);
   const deviationState = classifyDeviation(premiumRaw);
   const lookalikeSide = [pair.baseToken, pair.quoteToken].find((t) => !isOfficialStock(t.address) && resemblesOfficial(t.symbol, t.name));
@@ -100,16 +107,20 @@ function poolResult(input: string, pair: DsPair, snap: ComputedSnapshot): CheckR
   let verdict: CheckResult["verdict"];
   let headline: string;
   const details: string[] = [`${label} pair ${pair.baseToken.symbol}/${pair.quoteToken.symbol} (${pair.pairAddress}), liquidity ${fmtUsd(pair.liquidity?.usd ?? 0, 0)}, 24h volume ${fmtUsd(pair.volume?.h24 ?? 0, 0)}.`];
-  if (matched && counterWarnings.length > 0) {
-    verdict = "danger";
-    headline = `Pool contains Coinbase-issued ${matched.ticker} but is quoted against ${counter?.symbol ?? "an unrecognised token"}`;
+  if (matched && !counterClean) {
+    verdict = counterSuspicious ? "danger" : "info";
+    headline = counterSuspicious
+      ? `Pool contains Coinbase-issued ${matched.ticker} but is quoted against ${counter?.symbol ?? "an unrecognised token"}`
+      : `${label} pool for Coinbase-issued ${matched.ticker}, quoted in ${counter?.symbol ?? "a non-USD asset"}: unpriced`;
     details.push(...counterWarnings);
-    if (referencePrice !== null) details.push(`The inferred ${fmtUsd(priceUsd)} is not comparable to the Chainlink reference of ${fmtUsd(referencePrice)}, so no premium is computed — unpriced.`);
+    if (referencePrice !== null) details.push(`A USD price inferred through ${counter?.symbol ?? "that token"} would not be comparable to the Chainlink reference of ${fmtUsd(referencePrice)}, so no premium is computed and no converted price is shown. The pool is unpriced.`);
   } else if (matched) {
     verdict = deviationState === "dislocated" ? "caution" : "verified";
-    headline = `${label} pool for Coinbase-issued ${matched.ticker}${premiumBps === null ? "" : ` — ${fmtBps(premiumBps)} vs the Chainlink reference (${deviationState})`}`;
-    details.push(`${matched.ticker} side is the official token at ${matched.address}. Counter-asset ${counter?.symbol ?? "?"} is a recognised quote asset.`);
-    if (referencePrice !== null) details.push(`Pool ${fmtUsd(priceUsd)} vs reference ${fmtUsd(referencePrice)} (${stock?.feed.state}).`);
+    headline = `${label} pool for Coinbase-issued ${matched.ticker}${premiumBps === null ? "" : `: ${fmtBps(premiumBps)} vs the Chainlink reference (${deviationState})`}`;
+    details.push(`${matched.ticker} side is the official token at ${matched.address}. Counter-asset ${counter?.symbol ?? "?"} is a USD stablecoin.`);
+    if (priceUsd <= 0) details.push("DexScreener reported no usable price for this pool at this block, so no premium is computed.");
+    else if (referencePrice !== null) details.push(`Pool ${fmtUsd(priceUsd)} vs reference ${fmtUsd(referencePrice)} (${stock?.feed.state}).`);
+    else details.push(`Pool ${fmtUsd(priceUsd)}; the Chainlink reference did not answer at this block, so no premium is computed.`);
   } else if (lookalikeSide) {
     verdict = "danger";
     headline = `Not a Coinbase stock: "${lookalikeSide.symbol}" in this pool imitates ${resemblesOfficial(lookalikeSide.symbol, lookalikeSide.name)}`;
@@ -122,7 +133,7 @@ function poolResult(input: string, pair: DsPair, snap: ComputedSnapshot): CheckR
   const checks: Check[] = [
     { id: "pool-found", label: "Pool found on DexScreener", passed: true, detail: `${label}, ${pair.url}` },
     { id: "official-side", label: "One side is a Coinbase-issued stock", passed: !!matched, detail: matched ? `${matched.ticker} at ${matched.address}` : "No official token address in this pair." },
-    { id: "counter-asset", label: "Counter-asset is USDC, ETH/WETH or a Coinbase stock", passed: matched ? counterWarnings.length === 0 : null, detail: counter ? `${counter.symbol} (${shortAddr(counter.address)})` : "n/a" },
+    { id: "counter-asset", label: "Counter-asset is a USD stablecoin", passed: matched ? counterClean : null, detail: counter ? `${counter.symbol} (${shortAddr(counter.address)})${counterClean ? "" : counterSuspicious ? ": not a recognised asset" : ": recognised, but not a USD stablecoin, so the pool is unpriced"}` : "n/a" },
   ];
   const pool: CheckedPool = {
     pairAddress: pair.pairAddress,
@@ -131,7 +142,7 @@ function poolResult(input: string, pair: DsPair, snap: ComputedSnapshot): CheckR
     url: pair.url,
     baseToken: tokenRef(pair.baseToken),
     quoteToken: tokenRef(pair.quoteToken),
-    priceUsd,
+    priceUsd: matched && counterClean && priceUsd > 0 ? priceUsd : null,
     liquidityUsd: pair.liquidity?.usd ?? 0,
     volume24hUsd: pair.volume?.h24 ?? 0,
     matchedTicker: matched?.ticker ?? null,
@@ -149,9 +160,20 @@ async function addressResult(input: string, address: `0x${string}`, snap: Comput
     if (stock) return officialResult(input, stock);
   }
 
-  const [facts, pair] = await Promise.all([readArbitraryToken(address), pairByAddress(address)]);
+  const [facts, pairLookup] = await Promise.all([
+    readArbitraryToken(address),
+    pairByAddress(address).then(
+      (pair) => ({ pair, failed: false as const }),
+      (err: unknown) => ({ pair: null, failed: true as const, reason: err instanceof Error ? err.message : String(err) }),
+    ),
+  ]);
   // DexScreener resolving the address as a pair is authoritative: many pools (Aerodrome v2, Uniswap v2)
   // are themselves ERC-20 LP tokens, so token metadata must not override the pool classification.
+  // A B20 token is never a pool, so only a non-B20 address needs that answer before a verdict is given.
+  if (pairLookup.failed && !facts.isB20) {
+    throw new UpstreamUnavailable(`DexScreener did not answer for ${address} (${pairLookup.reason}), so it cannot be ruled out as a pool. Retry shortly.`);
+  }
+  const pair = pairLookup.pair;
   if (pair && !facts.isB20) {
     return poolResult(input, pair, snap);
   }
@@ -171,8 +193,8 @@ async function addressResult(input: string, address: `0x${string}`, snap: Comput
   };
   const checks: Check[] = [
     { id: "official-list", label: "Address on Coinbase's published token list", passed: false, detail: "Not on the list. Coinbase-issued stocks are identified by address only." },
-    { id: "b20-factory", label: "B20 factory reports isB20", passed: facts.isB20, detail: facts.isB20 ? "isB20 = true — a B20 token, which anyone can deploy; this does not indicate Coinbase issuance." : "isB20 = false." },
-    { id: "b20-prefix", label: "Address carries the 0xB200… prefix", passed: prefixLooksOfficial ? null : null, detail: prefixLooksOfficial ? "Yes — the prefix is shared by all B20 tokens, official or not." : "No." },
+    { id: "b20-factory", label: "B20 factory reports isB20", passed: facts.isB20, detail: facts.isB20 ? "isB20 = true: a B20 token, which anyone can deploy; this does not indicate Coinbase issuance." : "isB20 = false." },
+    { id: "b20-prefix", label: "Address carries the 0xB200… prefix", passed: prefixLooksOfficial ? null : null, detail: prefixLooksOfficial ? "Yes. The prefix is shared by all B20 tokens, official or not." : "No." },
     { id: "resemblance", label: "Name/symbol does not imitate an official ticker", passed: resembles ? false : null, detail: resembles ? `"${facts.symbol ?? facts.name}" resembles Coinbase's ${resembles}.` : "No resemblance detected." },
   ];
 
@@ -221,7 +243,7 @@ async function addressResult(input: string, address: `0x${string}`, snap: Comput
     input,
     kind: "not-found",
     verdict: "info",
-    headline: facts.hasCode ? "Contract found, but it is not a token or a known pool" : "Looks like a wallet address — not a token or pool",
+    headline: facts.hasCode ? "Contract found, but it is not a token or a known pool" : "Looks like a wallet address, not a token or pool",
     details: facts.hasCode
       ? [`${address} has bytecode but exposes no ERC-20 metadata and DexScreener knows no pool at this address.`]
       : [`${address} has no code. To see what it holds across Coinbase tokenized stocks, open the portfolio view for this address.`],
@@ -230,6 +252,11 @@ async function addressResult(input: string, address: `0x${string}`, snap: Comput
     pool: null,
     stockTicker: null,
   };
+}
+
+/** A dependency did not answer, so the verdict cannot be completed honestly. Reported as 502, never as "not found". */
+class UpstreamUnavailable extends Error {
+  readonly code = "upstream_unavailable";
 }
 
 router.get("/check", async (req, res): Promise<void> => {
@@ -252,26 +279,39 @@ router.get("/check", async (req, res): Promise<void> => {
   }
 
   let result: CheckResult;
-  if (isAddress(q)) {
-    result = await addressResult(q, getAddress(q), snap);
-  } else if (/^0x[0-9a-fA-F]{64}$/.test(q)) {
-    const pair = await pairByAddress(q);
-    result = pair
-      ? poolResult(q, pair, snap)
-      : { input: q, kind: "not-found", verdict: "info", headline: "No pool found for this 32-byte id", details: ["Uniswap v4 pool ids are looked up on DexScreener; this one is unknown."], checks: [], token: null, pool: null, stockTicker: null };
-  } else if (looksLikeBasename(q)) {
-    const address = await resolveBasename(q);
-    result = address
-      ? { input: q, kind: "not-found", verdict: "info", headline: `${q.toLowerCase()} resolves to a wallet (${shortAddr(address)})`, details: [`${address} — open the portfolio view to see its Coinbase tokenized stock holdings.`], checks: [], token: null, pool: null, stockTicker: null }
-      : { input: q, kind: "invalid", verdict: "info", headline: `${q} does not resolve to an address`, details: ["No Basename record found on the Base L2 resolver."], checks: [], token: null, pool: null, stockTicker: null };
-  } else if (/^0x/i.test(q)) {
-    result = { input: q, kind: "invalid", verdict: "info", headline: "That is not a valid address", details: ["Addresses are 42 characters (0x + 40 hex). Uniswap v4 pool ids are 66 characters."], checks: [], token: null, pool: null, stockTicker: null };
-  } else {
-    const def = findStockByTicker(q) ?? findStockByTicker(q.replace(/c$/i, ""));
-    const stock = def ? snap.stocks.get(def.ticker) : undefined;
-    result = stock
-      ? officialResult(q, stock)
-      : { input: q, kind: "not-found", verdict: "info", headline: `No Coinbase tokenized stock called "${q}"`, details: [`Coinbase-issued tickers on Base: ${tickerList}. Anything else trading under a stock name is not issued by Coinbase.`], checks: [], token: null, pool: null, stockTicker: null };
+  try {
+    if (isAddress(q)) {
+      result = await addressResult(q, getAddress(q), snap);
+    } else if (/^0x[0-9a-fA-F]{64}$/.test(q)) {
+      let pair: DsPair | null;
+      try {
+        pair = await pairByAddress(q);
+      } catch (err) {
+        throw new UpstreamUnavailable(`DexScreener did not answer for this pool id (${err instanceof Error ? err.message : String(err)}). Retry shortly.`);
+      }
+      result = pair
+        ? poolResult(q, pair, snap)
+        : { input: q, kind: "not-found", verdict: "info", headline: "No pool found for this 32-byte id", details: ["Uniswap v4 pool ids are looked up on DexScreener; this one is unknown."], checks: [], token: null, pool: null, stockTicker: null };
+    } else if (looksLikeBasename(q)) {
+      const address = await resolveBasename(q);
+      result = address
+        ? { input: q, kind: "not-found", verdict: "info", headline: `${q.toLowerCase()} resolves to a wallet (${shortAddr(address)})`, details: [`${address}: open the portfolio view to see its Coinbase tokenized stock holdings.`], checks: [], token: null, pool: null, stockTicker: null }
+        : { input: q, kind: "invalid", verdict: "info", headline: `${q} does not resolve to an address`, details: ["No Basename record found on the Base L2 resolver."], checks: [], token: null, pool: null, stockTicker: null };
+    } else if (/^0x/i.test(q)) {
+      result = { input: q, kind: "invalid", verdict: "info", headline: "That is not a valid address", details: ["Addresses are 42 characters (0x + 40 hex). Uniswap v4 pool ids are 66 characters."], checks: [], token: null, pool: null, stockTicker: null };
+    } else {
+      const def = findStockByTicker(q) ?? findStockByTicker(q.replace(/c$/i, ""));
+      const stock = def ? snap.stocks.get(def.ticker) : undefined;
+      result = stock
+        ? officialResult(q, stock)
+        : { input: q, kind: "not-found", verdict: "info", headline: `No Coinbase tokenized stock called "${q}"`, details: [`Coinbase-issued tickers on Base: ${tickerList}. Anything else trading under a stock name is not issued by Coinbase.`], checks: [], token: null, pool: null, stockTicker: null };
+    }
+  } catch (err) {
+    if (err instanceof UpstreamUnavailable) {
+      sendError(res, 502, err.message, err.code);
+      return;
+    }
+    throw err;
   }
 
   res.json(CheckAddressResponse.parse(result));

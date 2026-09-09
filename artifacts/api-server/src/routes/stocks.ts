@@ -39,7 +39,7 @@ async function loadHistory(ticker: string, window: string): Promise<{ points: Hi
   const points: HistoryPoint[] = rows.map((r) => ({
     tUtc: r.t,
     referencePrice: r.referencePrice,
-    poolPrice: r.poolPrice,
+    poolPrice: r.premiumBps === null ? null : r.poolPrice,
     premiumBps: r.premiumBps === null ? null : Math.round(r.premiumBps),
     feedState: r.feedState as HistoryPoint["feedState"],
   }));
@@ -60,7 +60,7 @@ router.get("/stocks/:ticker", async (req, res): Promise<void> => {
   const { ticker } = GetStockParams.parse({ ticker: param(req, "ticker") });
   const stock = lookup(snap, ticker);
   if (!stock) {
-    sendError(res, 404, `Unknown tokenized stock "${ticker}". Only Coinbase-issued tokens on the official list have labels; use /check for arbitrary addresses.`, "unknown_ticker");
+    sendError(res, 404, `Unknown tokenized stock "${ticker}". Only Coinbase-issued tokens on the official list have readings. Use /check for arbitrary addresses.`, "unknown_ticker");
     return;
   }
   let history: HistoryPoint[] = [];
@@ -155,7 +155,7 @@ router.get("/size-check", async (req, res): Promise<void> => {
   const currentPremiumBps = venue.premiumBps;
   const allIn = currentPremiumBps === null ? null : query.side === "buy" ? currentPremiumBps + impactBps : currentPremiumBps - impactBps;
   const shareOfLiquidityPct = (amount / L) * 100;
-  const tokensApprox = venue.priceUsd > 0 ? amount / venue.priceUsd : 0;
+  const tokensApprox = venue.priceUsd !== null && venue.priceUsd > 0 ? amount / venue.priceUsd : 0;
   const sizeWord = shareOfLiquidityPct < 0.5 ? "small relative to" : shareOfLiquidityPct < 5 ? "meaningful relative to" : "large relative to";
   res.json(
     GetSizeCheckResponse.parse({
@@ -170,7 +170,7 @@ router.get("/size-check", async (req, res): Promise<void> => {
       currentPremiumBps,
       estimatedAllInVsReferenceBps: allIn,
       tokensApprox,
-      method: "Constant-product estimate: impact ≈ amount / (liquidity ÷ 2) for buys and amount / (liquidity ÷ 2 + amount) for sells, using DexScreener's total pool liquidity. This is an approximation, not a guaranteed bound — concentrated-liquidity pools (Aerodrome Slipstream, Uniswap v3/v4) usually do better in range and worse out of range. The all-in figure is signed: premium + impact for buys, premium − impact for sells.",
+      method: "Constant-product estimate: impact ≈ amount / (liquidity ÷ 2) for buys and amount / (liquidity ÷ 2 + amount) for sells, using DexScreener's total pool liquidity. This is an approximation, not a guaranteed bound; concentrated-liquidity pools (Aerodrome Slipstream, Uniswap v3/v4) usually do better in range and worse out of range. The all-in figure is signed: premium + impact for buys, premium − impact for sells.",
       note: `$${amount.toLocaleString("en-US")} is ${sizeWord} the ${fmtCompactUsd(L)} in the ${venue.dexLabel} pool (${shareOfLiquidityPct.toFixed(2)}% of liquidity). The pool currently sits ${currentPremiumBps === null ? "at an unknown distance from" : `${currentPremiumBps >= 0 ? "+" : ""}${currentPremiumBps} bps from`} the reference; this is a factual sizing estimate, not a quote or a recommendation.`,
     }),
   );

@@ -4,7 +4,7 @@ info:
   title: Api
   version: 0.1.0
   description: >-
-    LumenMarc public API — fair-value and integrity data for Coinbase Tokenized
+    LumenMarc public API: fair-value and integrity data for Coinbase Tokenized
     Stocks (B20) on Base. All data is factual and read-only: issuer verification,
     Chainlink reference vs. onchain pool prices, oracle freshness, multiplier and
     share-equivalent ownership facts. No investment advice.
@@ -54,7 +54,7 @@ paths:
       operationId: getOverview
       tags: [stocks]
       summary: Market-wide overview (the tape header)
-      description: Aggregate snapshot across all Coinbase tokenized stocks — float, liquidity, feed freshness, biggest dislocations and integrity alerts.
+      description: "Aggregate snapshot across all Coinbase tokenized stocks: float, liquidity, feed freshness, biggest dislocations and integrity alerts."
       responses:
         "200":
           description: Overview
@@ -81,7 +81,7 @@ paths:
       operationId: getStock
       tags: [stocks]
       summary: Full label for one tokenized stock
-      description: Verify / Price / Own — issuer verification, reference vs. every known pool, oracle freshness, multiplier, supply, pauses, corporate actions and disclosures.
+      description: "Verify / Price / Own: issuer verification, reference vs. every known pool, oracle freshness, multiplier, supply, pauses, corporate actions and disclosures."
       parameters:
         - name: ticker
           in: path
@@ -141,7 +141,7 @@ paths:
       operationId: getSizeCheck
       tags: [stocks]
       summary: How a given trade size relates to available liquidity
-      description: Factual sizing information for the primary pool — share of liquidity and a conservative upper bound on price impact. Not a quote and not a recommendation.
+      description: "Factual sizing information for the primary pool: share of liquidity and a conservative upper bound on price impact. Not a quote and not a recommendation."
       parameters:
         - name: ticker
           in: query
@@ -181,7 +181,7 @@ paths:
       operationId: checkAddress
       tags: [integrity]
       summary: Verify any token or pool address
-      description: Paste any Base address or ticker. Returns whether it is a Coinbase-issued tokenized stock, a lookalike B20 token, another token, or a liquidity pool — with premium vs. the official reference where one applies.
+      description: Paste any Base address or ticker. Returns whether it is a Coinbase-issued tokenized stock, a lookalike B20 token, another token or a liquidity pool, with premium vs. the official reference where one applies.
       parameters:
         - name: q
           in: query
@@ -257,7 +257,7 @@ components:
           $ref: "#/components/schemas/MarketState"
         isOpen:
           type: boolean
-          description: True only during the regular session (09:30–16:00 ET) when the Chainlink feeds update.
+          description: True only during the regular session (09:30 to 16:00 ET) when the Chainlink feeds update.
         exchangeTimezone:
           type: string
           example: America/New_York
@@ -310,10 +310,10 @@ components:
           $ref: "#/components/schemas/FeedState"
         note:
           type: string
-          description: Plain-English explanation of the state, e.g. "Holding Friday's close — the feed updates only during US market hours."
+          description: Plain-English explanation of the state, e.g. "Holding Friday's close. The feed updates only during US market hours."
     DeviationState:
       type: string
-      description: fair = within 50 bps of reference; elevated = 50–300 bps; dislocated = more than 300 bps; unpriced = no venue or no reference.
+      description: fair = within 50 bps of reference; elevated = 50 to 300 bps; dislocated = more than 300 bps; unpriced = no venue, no reference or a pool that is not USD-comparable.
       enum: [fair, elevated, dislocated, unpriced]
     TokenRef:
       type: object
@@ -349,7 +349,8 @@ components:
         quoteToken:
           $ref: "#/components/schemas/TokenRef"
         priceUsd:
-          type: number
+          type: ["number", "null"]
+          description: Pool price of the token in USD. Null when the pool is quoted against an asset that is not USD-comparable; no converted price is exposed for such pools.
         premiumBps:
           type: ["integer", "null"]
           description: (pool − reference) / reference in basis points. Positive = pool trades above the reference.
@@ -494,6 +495,7 @@ components:
           type: number
         poolPrice:
           type: ["number", "null"]
+          description: Primary pool price in USD at that time. Null when the pool was unpriced.
         premiumBps:
           type: ["integer", "null"]
         feedState:
@@ -553,7 +555,7 @@ components:
           type: string
         addressIsB20:
           type: boolean
-          description: Address carries the B20 precompile prefix. Note that lookalikes can too — only the official list proves issuance.
+          description: Address carries the B20 precompile prefix. Note that lookalikes can too. Only the official list proves issuance.
         matchedOfficialList:
           type: boolean
         checks:
@@ -664,12 +666,12 @@ components:
           type: number
         estimatedImpactBps:
           type: integer
-          description: Constant-product price-impact estimate using the venue's total USD liquidity. An approximation, not a guaranteed bound — concentrated pools do better in range and worse out of range.
+          description: Constant-product price-impact estimate using the venue's total USD liquidity. An approximation, not a guaranteed bound. Concentrated pools do better in range and worse out of range.
         currentPremiumBps:
           type: ["integer", "null"]
         estimatedAllInVsReferenceBps:
           type: ["integer", "null"]
-          description: Signed estimate of the executed price versus the reference for this size — premium + impact for buys, premium − impact for sells. Null when the venue is not USD-comparable.
+          description: "Signed estimate of the executed price versus the reference for this size: premium + impact for buys, premium − impact for sells. Null when the venue is not USD-comparable."
         tokensApprox:
           type: number
         method:
@@ -698,7 +700,7 @@ components:
           type: boolean
         prefixLooksOfficial:
           type: boolean
-          description: Address begins with the 0xB200… B20 prefix that all Coinbase stocks share — and that anyone can also obtain.
+          description: Address begins with the 0xB200… B20 prefix that all Coinbase stocks share, and that anyone can also obtain.
         matchedTicker:
           type: ["string", "null"]
         totalSupply:
@@ -723,7 +725,8 @@ components:
         quoteToken:
           $ref: "#/components/schemas/TokenRef"
         priceUsd:
-          type: number
+          type: ["number", "null"]
+          description: Pool price of the matched Coinbase token in USD. Null when no Coinbase token is in the pool, the counter-asset is not USD-comparable or the pool reported no usable price.
         liquidityUsd:
           type: number
         volume24hUsd:

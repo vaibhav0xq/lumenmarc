@@ -41,7 +41,7 @@ export const DATA_SOURCES: string[] = [
   "Base mainnet JSON-RPC: B20 token reads (totalSupply, multiplier, isPaused, extraMetadata, contractURI, scaledBalanceOf), B20 factory isB20, Chainlink AggregatorV3 latestRoundData, Basenames L2 resolver",
   "DexScreener public API: pool discovery, pool prices, liquidity, 24h volume and transaction counts",
   OFFICIAL_LIST_SOURCE,
-  "LumenMarc US market session calendar (NYSE holidays and early closes, 2026–2027)",
+  "LumenMarc US market session calendar (NYSE holidays and early closes, 2026 to 2027)",
 ];
 
 export interface ComputedStock {
@@ -157,25 +157,25 @@ export function classifyFeed(feed: FeedRaw, session: SessionInfo, now: Date): Fe
     const sinceOpenMin = (now.getTime() - lastOpen) / 60000;
     if (updated >= lastOpen - 15 * 60000 && ageSeconds < 26 * 3600) {
       state = "live";
-      note = `Updating during the regular US session — last print ${fmtEt(feed.updatedAtUtc)} (updates on a 0.5% move or 24h heartbeat).`;
+      note = `Updating during the regular US session. Last print ${fmtEt(feed.updatedAtUtc)}; the feed updates on a 0.5% move or a 24 h heartbeat.`;
     } else if (sinceOpenMin > 20 || ageSeconds >= 26 * 3600) {
       state = "stale";
-      note = `The US market is open but this feed has not updated since ${fmtEt(feed.updatedAtUtc)}. A corporate-action pause or feed issue may be in effect — do not rely on this price.`;
+      note = `The US market is open but this feed has not updated since ${fmtEt(feed.updatedAtUtc)}. A corporate-action pause or a feed issue may be in effect. Do not rely on this price.`;
     } else {
       state = "live";
-      note = `Regular session just opened — holding ${fmtEt(feed.updatedAtUtc)} until the first print of the day.`;
+      note = `Regular session just opened. Holding ${fmtEt(feed.updatedAtUtc)} until the first print of the day.`;
     }
   } else if (session.inExtendedHours) {
     state = ageSeconds < 15 * 60 ? "live" : "held";
     note =
       state === "live"
-        ? `Extended hours (${session.reason.split(" — ")[0]}) — last print ${fmtEt(feed.updatedAtUtc)}.`
-        : `Extended hours — holding the last print from ${fmtEt(feed.updatedAtUtc)}. Regular session ${session.state === "premarket" ? "opens" : "resumes"} ${nextOpen}.`;
+        ? `Extended hours (${session.reason.split(" · ")[0]}). Last print ${fmtEt(feed.updatedAtUtc)}.`
+        : `Extended hours. Holding the last print from ${fmtEt(feed.updatedAtUtc)}; the regular session ${session.state === "premarket" ? "opens" : "resumes"} ${nextOpen}.`;
   } else {
     state = "held";
     const day = weekdayName(feed.updatedAtUtc);
     const why = session.holidayName ? `${session.holidayName}` : session.state === "closed" && session.reason.startsWith("Weekend") ? "the weekend" : "the market close";
-    note = `Holding ${day}'s last print (${fmtEt(feed.updatedAtUtc)}) over ${why} — the feed updates only while the US market trades. Next regular session ${nextOpen}.`;
+    note = `Holding ${day}'s last print (${fmtEt(feed.updatedAtUtc)}) over ${why}. The feed updates only while the US market trades; the next regular session ${nextOpen}.`;
   }
   return { ...base, ageSeconds, state, note };
 }
@@ -219,17 +219,34 @@ function looksLikeB20(address: string): boolean {
   return address.toLowerCase().startsWith(B20_ASSET_PREFIX);
 }
 
+/** Only a recognised USD stablecoin quote is compared with the Chainlink reference; everything else is unpriced. */
+export function isUsdComparableCounter(address: string): boolean {
+  return KNOWN_QUOTE_TOKENS[address.toLowerCase()]?.isStablecoin === true;
+}
+
+/** A counter-asset LumenMarc recognises (stablecoin, ETH/WETH or a Coinbase-issued stock), as opposed to an arbitrary token. */
+export function isRecognisedCounter(address: string): boolean {
+  const lower = address.toLowerCase();
+  return isOfficialStock(lower) || !!KNOWN_QUOTE_TOKENS[lower];
+}
+
 export function counterAssetWarnings(counter: TokenRef): string[] {
   const warnings: string[] = [];
   const lower = counter.address.toLowerCase();
-  if (isOfficialStock(lower) || KNOWN_QUOTE_TOKENS[lower]) return warnings;
+  if (isUsdComparableCounter(lower)) return warnings;
+  if (isRecognisedCounter(lower)) {
+    warnings.push(
+      `Quoted against ${counter.symbol}, not a USD stablecoin. LumenMarc compares only USD-stablecoin quotes with the Chainlink reference, so this pool is unpriced and no converted price is shown.`,
+    );
+    return warnings;
+  }
   if (looksLikeB20(lower)) {
     warnings.push(
-      `Counter-asset ${counter.symbol} (${shortAddr(counter.address)}) carries the B20 0xB200… prefix but is not on Coinbase's list — it is not a Coinbase-issued stock.`,
+      `Counter-asset ${counter.symbol} (${shortAddr(counter.address)}) carries the B20 0xB200… prefix but is not on Coinbase's list, so it is not a Coinbase-issued stock.`,
     );
   }
   warnings.push(
-    `Quoted against ${counter.symbol}, which is not USDC, ETH/WETH or a Coinbase-issued stock. The USD price is inferred from ${counter.symbol}'s own market price and may be meaningless.`,
+    `Quoted against ${counter.symbol}, which is not a recognised USD stablecoin. A USD price could only be inferred through ${counter.symbol}'s own market, so none is shown.`,
   );
   return warnings;
 }
@@ -248,30 +265,33 @@ export function venueFromPair(pair: DsPair, tokenAddress: string, referencePrice
   const warnings: string[] = [];
   const basePriceUsd = pair.priceUsd ? Number(pair.priceUsd) : NaN;
   const priceNative = Number(pair.priceNative);
-  let priceUsd: number;
+  // DexScreener's USD figure for the token. It is only exposed when the counter-asset is USD-comparable;
+  // for any other pool it stays internal, so an inferred conversion never leaves the process.
+  let inferredUsd: number;
   if (baseIsToken) {
-    priceUsd = Number.isFinite(basePriceUsd) ? basePriceUsd : 0;
+    inferredUsd = Number.isFinite(basePriceUsd) ? basePriceUsd : 0;
   } else {
-    priceUsd = Number.isFinite(basePriceUsd) && priceNative > 0 ? basePriceUsd / priceNative : 0;
+    inferredUsd = Number.isFinite(basePriceUsd) && priceNative > 0 ? basePriceUsd / priceNative : 0;
     warnings.push("This token is the quote asset of the pool; its USD price is derived from the base token's USD price.");
   }
+  if (inferredUsd <= 0) return null;
   const counter = baseIsToken ? pair.quoteToken : pair.baseToken;
   const counterRef = tokenRef(counter);
   const counterLower = counter.address.toLowerCase();
-  const counterClean = isOfficialStock(counterLower) || !!KNOWN_QUOTE_TOKENS[counterLower];
+  const counterClean = isUsdComparableCounter(counterLower);
   warnings.push(...counterAssetWarnings(counterRef));
   if (!counterClean) {
-    warnings.push(`Premium not computed: a USD price inferred through ${counter.symbol} is not comparable to the Chainlink reference.`);
+    warnings.push(`Premium not computed: a USD price inferred through ${counter.symbol} is not comparable to the Chainlink reference, so no converted price is shown.`);
   }
 
   const liquidityUsd = pair.liquidity?.usd ?? 0;
   if (liquidityUsd > 0 && liquidityUsd < THIN_LIQUIDITY_USD) {
-    warnings.push(`Thin liquidity (${fmtCompactUsd(liquidityUsd)}) — small trades can move this pool's price materially.`);
+    warnings.push(`Thin liquidity (${fmtCompactUsd(liquidityUsd)}): small trades can move this pool's price materially.`);
   }
   if (liquidityUsd === 0) warnings.push("No liquidity reported for this pool.");
 
-  // Only pools quoted against a recognised USD-priceable asset get a premium; anything else is "unpriced".
-  const premiumRaw = counterClean && referencePrice !== null ? premiumBpsOf(priceUsd, referencePrice) : null;
+  // Only pools quoted against a recognised USD stablecoin get a premium; anything else is "unpriced".
+  const premiumRaw = counterClean && referencePrice !== null ? premiumBpsOf(inferredUsd, referencePrice) : null;
   const premiumBps = premiumRaw === null ? null : Math.round(premiumRaw);
   const txns = pair.txns?.h24;
   return {
@@ -281,7 +301,7 @@ export function venueFromPair(pair: DsPair, tokenAddress: string, referencePrice
     url: pair.url,
     baseToken: tokenRef(pair.baseToken),
     quoteToken: tokenRef(pair.quoteToken),
-    priceUsd,
+    priceUsd: counterClean ? inferredUsd : null,
     premiumBps,
     premiumPct: premiumRaw === null ? null : premiumRaw / 100,
     liquidityUsd,
@@ -296,8 +316,7 @@ export function venueFromPair(pair: DsPair, tokenAddress: string, referencePrice
 
 function isCleanCounter(v: VenueQuote, tokenAddress: string): boolean {
   const counter = v.baseToken.address.toLowerCase() === tokenAddress.toLowerCase() ? v.quoteToken : v.baseToken;
-  const lower = counter.address.toLowerCase();
-  return isOfficialStock(lower) || !!KNOWN_QUOTE_TOKENS[lower];
+  return isUsdComparableCounter(counter.address);
 }
 
 /** Rank venues: recognised counter-assets first, then by liquidity. Marks the primary. */
@@ -323,10 +342,13 @@ function headlineFor(def: StockDefinition, token: TokenRaw, feed: FeedReading, p
   }
   if (primary.premiumBps === null) {
     const counter = primary.baseToken.address.toLowerCase() === def.address.toLowerCase() ? primary.quoteToken : primary.baseToken;
-    if (feed.state === "unavailable") {
+    if (!isUsdComparableCounter(counter.address)) {
+      return `No USD-comparable pool for ${def.ticker}: ${primary.dexLabel} quotes it against ${counter.symbol} (not a USD stablecoin), so no converted price is shown and no premium is computed. Chainlink ${refPart}.`;
+    }
+    if (primary.priceUsd !== null && primary.priceUsd > 0 && feed.state === "unavailable") {
       return `${primary.dexLabel} pool quotes ${def.ticker} at ${fmtUsd(primary.priceUsd)}, but the Chainlink reference is unavailable, so no premium can be computed.`;
     }
-    return `No USD-comparable pool for ${def.ticker}: ${primary.dexLabel} quotes it against ${counter.symbol} (not a recognised quote asset) at an inferred ${fmtUsd(primary.priceUsd)} — premium not computed. Chainlink ${refPart}.`;
+    return `No premium for ${def.ticker} at this block: ${primary.dexLabel} reported no usable price. Chainlink ${refPart}.`;
   }
   const dir = primary.premiumBps > 0 ? "above" : primary.premiumBps < 0 ? "below" : "at";
   const gap = primary.premiumBps === 0 ? "exactly at" : `${fmtPct(primary.premiumPct ?? 0)} (${fmtBps(primary.premiumBps)}) ${dir}`;
@@ -370,7 +392,7 @@ function verificationChecks(token: TokenRaw, feed: FeedReading): Check[] {
       id: "reference-feed",
       label: "Chainlink reference feed responds for this stock",
       passed: feed.state === "unavailable" ? false : feedMatches,
-      detail: feed.state === "unavailable" ? feed.note : `${feed.description} at ${feed.feedAddress} — ${feed.state}, last update ${fmtEt(feed.updatedAtUtc)}.`,
+      detail: feed.state === "unavailable" ? feed.note : `${feed.description} at ${feed.feedAddress}: ${feed.state}, last update ${fmtEt(feed.updatedAtUtc)}.`,
     },
     {
       id: "pauses",
@@ -393,7 +415,7 @@ export function computeStock(def: StockDefinition, chain: ChainSnapshot, pairs: 
   const referencePrice = feed.state === "unavailable" ? null : feed.price;
   const rawVenues = pairs
     .map((p) => venueFromPair(p, def.address, referencePrice))
-    .filter((v): v is VenueQuote => v !== null && v.priceUsd > 0);
+    .filter((v): v is VenueQuote => v !== null);
   const venues = rankVenues(rawVenues, def.address);
   const primary = venues[0] ?? null;
   const deviationState: DeviationState = primary ? primary.deviationState : "unpriced";
@@ -409,7 +431,7 @@ export function computeStock(def: StockDefinition, chain: ChainSnapshot, pairs: 
       verified: true,
       name: "Coinbase (Coinbase Onchain SPV Ltd., ADGM)",
       source: OFFICIAL_LIST_SOURCE,
-      note: "Address matches Coinbase's published list. The 0xB200… prefix alone proves nothing — anyone can deploy a B20 token.",
+      note: "Address matches Coinbase's published list. The 0xB200… prefix alone proves nothing; anyone can deploy a B20 token.",
     },
     reference: feed,
     multiplier: token.multiplier,
@@ -450,13 +472,13 @@ export function buildAlerts(stocks: ComputedStock[], session: SessionInfo, looka
           severity: "danger",
           ticker: s.def.ticker,
           title: `${s.def.ticker} pool quoted against ${counter.symbol}, which is not Coinbase-issued`,
-          detail: `${v.dexLabel} pair ${shortAddr(v.pairAddress)} prices ${s.def.ticker} in ${counter.symbol} (${shortAddr(counter.address)}). The inferred USD price (${fmtUsd(v.priceUsd)}) is ${v.premiumPct !== null ? fmtPct(v.premiumPct) + " vs" : "not comparable to"} the Chainlink reference.`,
+          detail: `${v.dexLabel} pair ${shortAddr(v.pairAddress)} prices ${s.def.ticker} in ${counter.symbol} (${shortAddr(counter.address)}). A USD price inferred through ${counter.symbol} is not comparable to the Chainlink reference, so the pool is left unpriced.`,
           address: counter.address,
           pairAddress: v.pairAddress,
         });
       }
     }
-    if (s.primary && s.primary.deviationState === "dislocated" && isCleanCounter(s.primary, s.def.address)) {
+    if (s.primary && s.primary.priceUsd !== null && s.primary.deviationState === "dislocated" && isCleanCounter(s.primary, s.def.address)) {
       alerts.push({
         severity: Math.abs(s.primary.premiumBps ?? 0) > 1000 ? "danger" : "caution",
         ticker: s.def.ticker,
@@ -515,7 +537,7 @@ export function buildAlerts(stocks: ComputedStock[], session: SessionInfo, looka
     alerts.push({
       severity: "info",
       ticker: null,
-      title: `US market closed — ${session.reason.split(" — ")[0]}`,
+      title: `US market closed (${session.reason.split(" · ")[0]})`,
       detail: `All reference feeds hold their last print while pools keep trading 24/7, so premiums and discounts today reflect trading since the last US close. Next regular session ${fmtEt(session.nextOpenUtc)}.`,
       address: null,
       pairAddress: null,
@@ -601,17 +623,20 @@ function corporateActionsFor(token: TokenRaw): CorporateAction[] {
 
 export function buildLabel(s: ComputedStock, snap: ComputedSnapshot, history: HistoryPoint[], appUrl: string): StockLabel {
   const { def, token, feed, summary, venues, primary } = s;
-  const verifiedStatement = `${def.ticker} at ${def.address} is the Coinbase-issued tokenized stock for ${def.name}: it matches Coinbase's published address list${token.factoryIsB20 ? ", the B20 factory confirms it" : ""}${feed.state !== "unavailable" ? `, and its Chainlink reference feed (${feed.description}) responds` : ""}.`;
+  const verifiedStatement = `${def.ticker} at ${def.address} is the Coinbase-issued tokenized stock for ${def.name}: it matches Coinbase's published address list${token.factoryIsB20 ? ", the B20 factory confirms it" : ""}${feed.state !== "unavailable" ? ` and its Chainlink reference feed (${feed.description}) responds` : ""}.`;
   const premiumBps = primary?.premiumBps ?? null;
   let priceStatement: string;
   if (feed.state === "unavailable") priceStatement = "The Chainlink reference could not be read, so no premium or discount can be computed.";
   else if (!primary) priceStatement = `No pool with a usable price was found for ${def.ticker}. The Chainlink reference is ${fmtUsd(feed.price)} (${feed.state}).`;
-  else if (premiumBps === null) {
+  else if (premiumBps === null || primary.priceUsd === null) {
     const counter = primary.baseToken.address.toLowerCase() === def.address.toLowerCase() ? primary.quoteToken : primary.baseToken;
-    priceStatement = `${primary.dexLabel} (${shortAddr(primary.pairAddress)}) is the only venue found and it quotes ${def.ticker} against ${counter.symbol}, which is not USDC, ETH/WETH or a Coinbase-issued stock. The ${fmtUsd(primary.priceUsd)} shown is inferred through ${counter.symbol}'s own market and is not comparable to the Chainlink reference of ${fmtUsd(feed.price)}, so no premium is computed — unpriced.`;
+    priceStatement = isUsdComparableCounter(counter.address)
+      ? `${primary.dexLabel} (${shortAddr(primary.pairAddress)}) is quoted in ${counter.symbol} but reported no usable price at this block, so no premium is computed against the Chainlink reference of ${fmtUsd(feed.price)}. The token is unpriced.`
+      : `${primary.dexLabel} (${shortAddr(primary.pairAddress)}) is the only venue found and it quotes ${def.ticker} against ${counter.symbol}, which is not a recognised USD stablecoin. A USD price could only be inferred through ${counter.symbol}'s own market and would not be comparable to the Chainlink reference of ${fmtUsd(feed.price)}, so no converted price is shown and no premium is computed. The token is unpriced.`;
   } else {
-    const dir = (premiumBps ?? 0) > 0 ? "above" : (premiumBps ?? 0) < 0 ? "below" : "at";
-    priceStatement = `${primary.dexLabel} (${shortAddr(primary.pairAddress)}) quotes ${fmtUsd(primary.priceUsd)}, ${fmtBps(premiumBps ?? 0)} ${dir} the Chainlink reference of ${fmtUsd(feed.price)} — ${summary.deviationState}. ${feed.state === "held" ? "The reference is the last US close; pools trade 24/7, so a gap outside market hours is expected and closes at the issuer's mint/redeem edge only during US hours." : feed.state === "stale" ? "The reference is stale; treat the gap with caution." : "Both prices are current."}`;
+    const bps: number = premiumBps;
+    const dir = bps > 0 ? "above" : bps < 0 ? "below" : "at";
+    priceStatement = `${primary.dexLabel} (${shortAddr(primary.pairAddress)}) quotes ${fmtUsd(primary.priceUsd)}, ${fmtBps(bps)} ${dir} the Chainlink reference of ${fmtUsd(feed.price)} (${summary.deviationState}). ${feed.state === "held" ? "The reference is the last US close; pools trade around the clock, so a gap outside market hours is expected and closes at the issuer's mint and redeem edge only during US hours." : feed.state === "stale" ? "The reference is stale; treat the gap with caution." : "Both prices are current."}`;
   }
   const liquidityUsd = primary?.liquidityUsd ?? 0;
   const referenceText = feed.state === "unavailable" ? "Chainlink reference unavailable" : `Chainlink reference ${fmtUsd(feed.price)}${feed.state === "held" ? " (last US close)" : ""}`;
