@@ -16,7 +16,8 @@ Thanks for taking the time. LumenMarc is a small, opinionated project and the ru
 
 ```bash
 pnpm install
-cp .env.example .env
+# Every variable in .env.example is optional. Nothing reads .env automatically: export what you need
+# in the shell before starting (for example: set -a; source .env; set +a).
 pnpm --filter @workspace/api-server run dev   # API on $PORT (default 8080)
 pnpm --filter @workspace/lumenmarc run dev    # UI on $PORT (default 5173), /api proxied to the API
 ```

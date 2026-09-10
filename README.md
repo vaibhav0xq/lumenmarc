@@ -45,7 +45,7 @@ Coinbase Tokenized Stocks are B20 tokens issued by Coinbase on Base. They trade 
 | --- | --- | --- |
 | **Verify** | Is this token the Coinbase-issued stock or a lookalike? | Address pinned against Coinbase's published list, B20 factory check, onchain symbol and name, Chainlink feed presence, pause flags |
 | **Price** | Is the pool price fair versus the real stock? | Live DEX pool prices compared with the official Chainlink "Coinbase TICKER" total-return reference: premium or discount in basis points, oracle freshness and US market session state |
-| **Own** | What does one token represent? | Multiplier, share-equivalents, dividend and custody policy, ISIN, supply cap, corporate-action status |
+| **Own** | What does one token represent? | Multiplier, share-equivalents, dividend and custody policy, ISIN and CUSIP, total supply, corporate-action status |
 
 Everything is computed from public onchain data and public APIs. There is no wallet connection, no custody, no order routing and no recommendation. LumenMarc is informational market-integrity infrastructure, not a brokerage and not investment advice.
 
@@ -89,7 +89,7 @@ LumenMarc turns those facts into a reading a person can take in a few seconds an
 - **Portfolio** (`/portfolio/:account`): positions, share-equivalents and reference-priced value for any address or Basename. Read-only, no connection.
 - **Embed** (`/embed/:ticker`): a compact card that works inside an iframe.
 - **Size check**: a constant-product estimate of price impact for a USD amount on the primary pool, combined with the current premium into a signed all-in figure. Refused when the venue is unpriced.
-- **Public JSON API**: everything above as unauthenticated `GET` endpoints, validated against an OpenAPI contract before a response leaves the process.
+- **Public JSON API**: everything above as open `GET` endpoints, each response parsed against the OpenAPI contract before it leaves the process.
 
 ---
 
@@ -98,8 +98,8 @@ LumenMarc turns those facts into a reading a person can take in a few seconds an
 ```
 Base mainnet (viem, public RPCs with fallbacks) ─────────┐
   listed B20 tokens: symbol, name, decimals, totalSupply, │
-  supplyCap, multiplier, isPaused(mint/burn/transfer),    │
-  extraMetadata; B20 factory isB20()                      │      ┌────────────────────────┐
+  multiplier, isPaused(mint/burn/transfer), contractURI,   │
+  extraMetadata(isin, cusip); B20 factory isB20()          │      ┌────────────────────────┐
   Chainlink "Coinbase TICKER" feeds: latestRoundData,      ├────▶ │ Snapshot + label engine │
   description, decimals                                   │      │ feed state             │      ┌─────────────────┐
   Basenames L2 resolver (forward and reverse)             │      │ venue ranking          │ ───▶ │ Express 5 API   │ ───▶ React UI
@@ -139,7 +139,7 @@ NYSE calendar 2026 to 2028 (in repo) ──────────────�
 
 | Source | What is read | Notes |
 | --- | --- | --- |
-| Base mainnet RPC | B20 token state (`symbol`, `name`, `decimals`, `totalSupply`, `supplyCap`, `multiplier`, `isPaused(uint8)`, `extraMetadata`, `scaledBalanceOf`), `B20Factory.isB20()`, Chainlink `latestRoundData` | Public RPCs `mainnet.base.org`, `base-rpc.publicnode.com`, `base.drpc.org`, `1rpc.io/base` behind a fallback transport. `BASE_RPC_URL` adds a keyed endpoint first |
+| Base mainnet RPC | B20 token state (`symbol`, `name`, `decimals`, `totalSupply`, `multiplier`, `isPaused(uint8)`, `contractURI`, `extraMetadata`, `scaledBalanceOf`), `B20Factory.isB20()`, Chainlink `latestRoundData` | Public RPCs `mainnet.base.org`, `base-rpc.publicnode.com`, `base.drpc.org`, `1rpc.io/base` behind a fallback transport. `BASE_RPC_URL` adds a keyed endpoint first |
 | Chainlink "Coinbase TICKER" feeds | Reference price, 8 decimals, total-return | The feed and the token multiplier stay comparable after dividends |
 | DexScreener public API | Every Base pool for the listed tokens (price, liquidity, quote asset, DEX), lookalike search by ticker | Bounded in-process cache; rate-limited upstream |
 | Basenames L2 resolver | Forward and reverse resolution for `/check` and `/portfolio` inputs | Onchain, no third-party API |
@@ -155,19 +155,19 @@ B20 tokens are Base-native precompiles at `0xB200` addresses with no bytecode an
 These rules are enforced in the API, checked against the OpenAPI schemas and mirrored in the UI.
 
 1. **Nothing is mocked.** Every number comes from a Base RPC call, a Chainlink round, DexScreener or arithmetic on those. There are no placeholder values, sample data or hardcoded counts.
-2. **A failed read never becomes a default.** If a refresh fails after a first success, the previous block-stamped snapshot is kept and a warning is surfaced; the block number is shown on the readings page. Before the first successful read the API answers `503 snapshot_unavailable` with a reason. An upstream outage is reported as `502` or `503`, never as "not found".
-3. **Only USD-stablecoin quotes are priced.** A pool is compared with the Chainlink reference only when its counter-asset is a recognised USD stablecoin (USDC on Base). Pools quoted in ETH/WETH or in another Coinbase-issued stock are recognised but `unpriced` with a calm note; pools quoted in any other token are `unpriced` with a warning. For an unpriced pool `priceUsd` and `poolPrice` are `null`, no premium is computed and the size check is refused with `422`. A USD figure inferred through the counter-asset's own market never leaves the process. This is why TSLAc reads "Unpriced" everywhere.
-4. **Feed state is judged against the market calendar.** `live` while the feed prints during the regular session (or within the last 15 minutes in extended hours); `held` when the US market is closed and the feed holds the last print; `stale` when the market has been open for more than 20 minutes with no new print; `unavailable` when the feed cannot be read or returns a non-positive answer.
+2. **A failed read never becomes a default.** If a refresh fails after a first success, the previous block-stamped snapshot is kept: every payload carries its block number and `updatedAtUtc`, the readings page shows both and `/api/cron/snapshot` reports the last refresh error as `warning`. Before the first successful read the API answers `503 snapshot_unavailable` with the reason. A position whose reference feed is `unavailable` is listed with a zero reference price and value and flagged with its `feedState` rather than priced from something else.
+3. **Only USD-stablecoin quotes are priced.** A pool is compared with the Chainlink reference only when its counter-asset is a recognised USD stablecoin (USDC on Base). Pools quoted in anything else, including ETH/WETH or another Coinbase-issued stock, are `unpriced`: the venue carries a warning that explains why and the overview raises an alert for the pool. For an unpriced pool `priceUsd` and `poolPrice` are `null`, no premium is computed and the size check is refused with `422`. A USD figure inferred through the counter-asset's own market never leaves the process. This is why TSLAc reads "Unpriced" everywhere.
+4. **Feed state is judged against the market calendar.** `live` while the feed prints during the regular session (a print since 15 minutes before the open counts; the first 20 minutes after the open are a grace period) or within the last 15 minutes in extended hours; `held` when the US market is closed and the feed holds the last print; `stale` when the market has been open for more than 20 minutes without a print since the open or when the last print is more than 26 hours old; `unavailable` when the feed cannot be read or returns a non-positive answer.
 5. **Deviation thresholds are fixed and stated.** `fair` within 50 bps of the reference, `elevated` from 50 to 300 bps, `dislocated` above 300 bps.
 6. **Venues are ranked, then trusted in that order.** USD-stablecoin pools rank first, then by liquidity; the first is the primary venue that drives the headline. Pools under $25K liquidity carry a thin-liquidity warning.
 7. **Identity comes from the pinned list only.** A token that passes `isB20()`, carries the `0xB200` prefix and copies the name and symbol is still reported as a lookalike when its address is not on Coinbase's list.
-8. **Every response is schema-validated** before it is sent. A response that does not match `openapi.yaml` is a server error, not a partially rendered page.
+8. **Every product response is parsed against the contract** before it is sent. A payload that does not fit the schema generated from `openapi.yaml` is a `500`, not a partially rendered page. Error bodies share one shape and the operational cron endpoint is outside the contract.
 
 ---
 
 ## Public JSON API
 
-All endpoints are `GET`, unauthenticated and served under `/api`. The contract is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
+All endpoints are `GET` under `/api` and need no key. The one exception is `/api/cron/snapshot`, which requires `Authorization: Bearer <CRON_SECRET>` once that secret is configured. The contract is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml); the cron endpoint is operational and sits outside it.
 
 | Endpoint | Returns |
 | --- | --- |
@@ -180,9 +180,9 @@ All endpoints are `GET`, unauthenticated and served under `/api`. The contract i
 | `/api/size-check?ticker=NVDAc&amountUsd=10000&side=buy` | Estimated impact and all-in figure versus the reference; `422` when the venue is unpriced |
 | `/api/check?q=...` | A verdict for a ticker, token address, pool address, Uniswap v4 pool id, wallet address or Basename |
 | `/api/portfolio/{account}` | Positions, share-equivalents and reference-priced value for an address or Basename |
-| `/api/cron/snapshot` | Refreshes the snapshot when it is stale; a forced refresh with `Authorization: Bearer CRON_SECRET` |
+| `/api/cron/snapshot` | Refreshes the snapshot when it is stale and reports the last refresh error as `warning`. With `CRON_SECRET` set, callers must present the bearer secret and every call forces a refresh |
 
-Missing required query parameters return `400 bad_request`; unknown tickers return `404 not_found`; upstream outages return `502` or `503` with a reason.
+Errors are JSON with the shape `{ "error", "code" }`. Missing or invalid query parameters return `400 bad_request`; unknown tickers return `404 unknown_ticker`; an account that is neither an address nor a resolving Basename returns `404 unresolvable_account`; a size check on an unpriced venue returns `422 unpriced_venue`; history without a database returns `503 history_disabled`; a snapshot that has never been computed returns `503 snapshot_unavailable`; a failed balance read returns `502 rpc_read_failed`. Anything unexpected is a `500 internal_error` with the message, never an HTML error page.
 
 ```bash
 APP=https://lumenmarc.netlify.app
@@ -215,7 +215,8 @@ Requirements: Node.js 20 or newer (22 recommended) and pnpm 10 (`corepack enable
 ```bash
 git clone https://github.com/vaibhav0xq/lumenmarc.git && cd lumenmarc
 pnpm install
-cp .env.example .env                        # every variable is optional; the file explains what each one enables
+cp .env.example .env                        # optional: every variable is optional and nothing reads .env automatically,
+set -a; source .env; set +a                 # so export the values you filled in before starting
 pnpm --filter @workspace/db run push        # only if DATABASE_URL is set: creates premium_snapshots
 pnpm --filter @workspace/api-server run dev # API on $PORT (default 8080), mounted at /api, refresh every 60 s
 pnpm --filter @workspace/lumenmarc run dev  # UI on $PORT (default 5173); /api is proxied to the API in dev
@@ -229,7 +230,7 @@ pnpm --filter @workspace/lumenmarc run dev  # UI on $PORT (default 5173); /api i
 | --- | --- | --- |
 | `BASE_RPC_URL` | no (recommended in production) | Keyed Base RPC endpoint tried before the public RPCs |
 | `DATABASE_URL` | no | Postgres for the premium-history series; without it history endpoints answer `history_disabled` |
-| `PUBLIC_APP_URL` | no | Canonical origin for share text and embed snippets |
+| `PUBLIC_APP_URL` | no | Canonical origin used in the API's `shareText` links; falls back to the request host. The UI's embed snippet uses the page's own origin |
 | `CRON_SECRET` | no | Bearer secret that allows forced refreshes on `GET /api/cron/snapshot` |
 | `LOG_LEVEL` | no | pino log level, default `info` |
 | `API_PROXY_TARGET` | no (dev only) | Where the Vite dev server forwards `/api` |
