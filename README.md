@@ -279,6 +279,7 @@ docs/DEPLOY_VERCEL.md           Vercel guide
 docs/design/instrument-style.md The shipped visual system: dark instrument, Newsreader display serif, motion rules
 docs/research/                  Research report, onchain snapshot, source registry and captured sources
 docs/screenshots/               The screenshots used in this README
+docs/brand/                     App icon (1024 x 1024 PNG) matching the site favicon
 ```
 
 ---
