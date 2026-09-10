@@ -1,8 +1,6 @@
 <div align="center">
 
-# LumenMarc
-
-**A clear market mark for tokenized stocks.**
+![LumenMarc: a clear market mark for tokenized stocks](docs/brand/lumenmarc-readme-banner.png)
 
 Read-only fair-value and integrity layer for Coinbase Tokenized Stocks (B20 tokens) on Base.
 Verify the token, compare the onchain price with its Chainlink reference and see what one token represents.

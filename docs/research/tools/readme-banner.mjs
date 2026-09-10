@@ -32,10 +32,10 @@ html,body{margin:0;width:1200px;height:360px;background:#0A0C10;color:#ECE7DA;fo
 .url{font-family:"IBM Plex Mono",monospace;font-size:14px;color:rgba(236,231,218,.55);letter-spacing:.02em}
 h1{position:relative;font-family:"Newsreader Variable",Georgia,serif;font-weight:400;font-size:66px;line-height:1;letter-spacing:-.025em;margin:0;max-width:760px}
 h1 .m{color:rgba(236,231,218,.55)}
-.foot{position:relative;display:flex;align-items:center;justify-content:space-between;padding-top:18px;border-top:1px solid rgba(236,231,218,.12);font-family:"IBM Plex Mono",monospace;font-size:14px;color:rgba(236,231,218,.6);letter-spacing:.02em}
+.foot{position:relative;display:flex;align-items:center;justify-content:space-between;padding-top:18px;border-top:1px solid rgba(236,231,218,.12);font-family:"IBM Plex Mono",monospace;font-size:13px;color:rgba(236,231,218,.6);letter-spacing:.02em}
 .foot .live{color:#7BD88F}.foot .live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#7BD88F;margin-right:8px;vertical-align:middle}
 .foot .dot{color:rgba(236,231,218,.3)}
-.foot .group{display:flex;align-items:center;gap:22px}
+.foot .group{display:flex;align-items:center;gap:18px}
 .foot span{white-space:nowrap}
 .foot .url{color:rgba(236,231,218,.78)}
 </style></head><body><div class="plate">
