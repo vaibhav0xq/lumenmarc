@@ -1,234 +1,330 @@
+<div align="center">
+
 # LumenMarc
 
 **A clear market mark for tokenized stocks.**
 
-LumenMarc is a read-only fair-value and integrity layer for **Coinbase Tokenized Stocks (B20 tokens) on Base**. Before anyone touches a tokenized stock onchain, it answers three factual questions in one screen:
+Read-only fair-value and integrity layer for Coinbase Tokenized Stocks (B20 tokens) on Base.
+Verify the token, compare the onchain price with its Chainlink reference and see what one token represents.
 
-| Pillar | Question | How LumenMarc answers it |
-| --- | --- | --- |
-| **Verify** | Is this token really the Coinbase-issued stock or a lookalike? | Address pinned against Coinbase's published list, B20 factory check, onchain symbol/name, Chainlink feed presence, pause flags |
-| **Price** | Is this pool price fair versus the real stock? | Live DEX pool prices compared with the official Chainlink "Coinbase &lt;TICKER&gt;" total-return reference, with premium/discount in bps, oracle freshness and US-market session state |
-| **Own** | What does one token actually represent? | Multiplier, share-equivalents, dividend/custody policy, ISIN, supply cap, corporate-action status |
+[**Live app**](https://lumenmarc.netlify.app) · [**Source**](https://github.com/vaibhav0xq/lumenmarc) · [**JSON API**](#public-json-api) · [**Research**](docs/research/base-builder-quest-report.md)
 
-Everything is computed from public onchain and public API data. There is no wallet connection, no custody, no order routing and no recommendation. LumenMarc is informational market-integrity infrastructure, not a brokerage and not investment advice.
+`React 19` `Vite 7` `Tailwind 4` `Express 5` `viem` `Zod` `Drizzle` `Postgres` `Netlify Functions` `MIT`
 
-Built for the **Base Build "Builder Quest" for Tokenized Stocks** (September 2026) by **[vaibhav0xq](https://github.com/vaibhav0xq)**.
+</div>
 
-Repository: [github.com/vaibhav0xq/lumenmarc](https://github.com/vaibhav0xq/lumenmarc) · Deployment guides: [Netlify](docs/DEPLOY_NETLIFY.md), [Vercel](docs/DEPLOY_VERCEL.md) · License: MIT
+![LumenMarc home: the instrument dial shows the widest current reading against its Chainlink reference](docs/screenshots/01-home-instrument.jpg)
 
 ---
 
-## Why this exists
+## Contents
 
-Coinbase Tokenized Stocks launched natively on Base on Aug 24, 2026 as B20 tokens. Within two weeks the onchain market already showed every failure mode a retail user could walk into. All of the following was measured live by LumenMarc on Mon Sep 7, 2026 (US Labor Day, market closed):
+1. [What it does](#what-it-does)
+2. [Screenshots](#screenshots)
+3. [Why it exists](#why-it-exists)
+4. [Feature summary](#feature-summary)
+5. [Architecture](#architecture)
+6. [Data sources](#data-sources)
+7. [Integrity rules](#integrity-rules)
+8. [Public JSON API](#public-json-api)
+9. [Running locally](#running-locally)
+10. [Deployment](#deployment)
+11. [Repository map](#repository-map)
+12. [Limitations](#limitations)
+13. [Disclosures](#disclosures)
+14. [Research and evidence](#research-and-evidence)
+15. [Contributing, security and license](#contributing-security-and-license)
 
-- **Lookalikes pass the obvious checks.** Anyone can deploy a B20 token and B20 addresses share the `0xB200…` prefix. A token named "NVIDIA Curenncy" with the symbol `NVDAc`, a token called `GOOGLc` and a "microstrategy"/`MSTR` token at `0xB20000000000000000000004255E0c2A4B401401` were all trading. All three pass `B20Factory.isB20()`. None is Coinbase-issued.
-- **Pool prices drift far from the real stock.** `AMZNc` traded **+10.6%** above the Chainlink reference in a $3.7K Uniswap v4 pool; `MSTRc` +3.7%; `SNDKc` +3.1%. The only `TSLAc` pool is quoted against a third-party token ("STC"), which made its inferred USD price read about four times the real stock. That number is meaningless, so LumenMarc neither shows it nor turns it into a premium.
-- **Reference prices freeze when the US market is closed.** The Chainlink feeds hold Friday's last print over weekends and holidays while pools trade 24/7. Users need to know whether a "gap" is expected (feed *held*) or anomalous (feed *stale*).
-- **Ownership is not 1 token = 1 share forever.** Cash dividends are converted to share-equivalents by raising the token's multiplier; the total-return reference price already reflects this. Nothing in a wallet or DEX UI shows it.
+---
+
+## What it does
+
+Coinbase Tokenized Stocks are B20 tokens issued by Coinbase on Base. They trade around the clock in permissionless DEX pools while the underlying US stock trades only during the NYSE session. LumenMarc answers three factual questions about any of them, in one screen and in one JSON call:
+
+| Pillar | Question | How LumenMarc answers it |
+| --- | --- | --- |
+| **Verify** | Is this token the Coinbase-issued stock or a lookalike? | Address pinned against Coinbase's published list, B20 factory check, onchain symbol and name, Chainlink feed presence, pause flags |
+| **Price** | Is the pool price fair versus the real stock? | Live DEX pool prices compared with the official Chainlink "Coinbase TICKER" total-return reference: premium or discount in basis points, oracle freshness and US market session state |
+| **Own** | What does one token represent? | Multiplier, share-equivalents, dividend and custody policy, ISIN, supply cap, corporate-action status |
+
+Everything is computed from public onchain data and public APIs. There is no wallet connection, no custody, no order routing and no recommendation. LumenMarc is informational market-integrity infrastructure, not a brokerage and not investment advice.
+
+Built for the **Base Build Builder Quest for Tokenized Stocks** (September 2026) by [vaibhav0xq](https://github.com/vaibhav0xq).
+
+---
+
+## Screenshots
+
+Captured from the live deployment on Sep 10, 2026 (US market closed, Chainlink feeds holding the last regular-session print).
+
+| | |
+| --- | --- |
+| ![Readings: every listed token on one rail, widest reading first, with the dial and the sheet for the selected token](docs/screenshots/02-readings.jpg) | ![TSLAc is unpriced: its only pool is quoted against a third-party token, so no USD price and no premium are shown](docs/screenshots/03-readings-tslac-unpriced.jpg) |
+| **Readings.** Every listed token on one rail, widest reading first. The dial and sheet follow the selected token; the trace below shows the last 24 hours of readings. | **Unpriced, on purpose.** The only TSLAc pool is quoted against a third-party token. LumenMarc shows no converted USD price and computes no premium. |
+| ![Sheet for NVDAc: reference, onchain price, feed freshness, supply, venues and disclosures](docs/screenshots/04-sheet-nvdac.jpg) | ![Verify: a third-party B20 token that imitates MSTRc is flagged, with the official MSTRc address shown](docs/screenshots/05-verify-lookalike.jpg) |
+| **Sheet.** One token in full: reference feed and freshness, onchain price with the venue behind it, supply and float, verification checks, size check, corporate actions and disclosures. | **Verify.** A third-party B20 token that passes the factory check and uses the shared `0xB200` prefix is still not a Coinbase stock. The verdict names the official address. |
+| ![Portfolio: holdings of an address read against the Chainlink reference and the deepest comparable pool](docs/screenshots/06-portfolio.jpg) | |
+| **Portfolio.** Any address or Basename, read-only: balances, share-equivalents, reference-priced value and the premium per holding. A holding without a USD-comparable pool leaves the onchain mark unpriced. | |
+
+---
+
+## Why it exists
+
+Coinbase Tokenized Stocks launched natively on Base on Aug 24, 2026. Within two weeks the onchain market already showed every failure mode a retail user could walk into. All of the following was measured live by LumenMarc on Sep 7, 2026 (US Labor Day, market closed) and is recorded in [docs/research/onchain-snapshot-2026-09-07.md](docs/research/onchain-snapshot-2026-09-07.md):
+
+- **Lookalikes pass the obvious checks.** Anyone can deploy a B20 token and B20 addresses share the `0xB200` prefix. A token named "NVIDIA Curenncy" with the symbol `NVDAc`, a token called `GOOGLc` and a "microstrategy" `MSTR` token at `0xB20000000000000000000004255E0c2A4B401401` were all trading. All three pass `B20Factory.isB20()`. None is Coinbase-issued.
+- **Pool prices drift far from the real stock.** `AMZNc` traded 10.6% above the Chainlink reference in a $3.7K Uniswap v4 pool; `MSTRc` 3.7% above; `SNDKc` 3.1% above. The only `TSLAc` pool is quoted against a third-party token, which made its inferred USD price read about four times the real stock. That number is meaningless, so LumenMarc neither shows it nor turns it into a premium.
+- **Reference prices freeze when the US market is closed.** Chainlink feeds hold Friday's last print over weekends and holidays while pools trade 24/7. Users need to know whether a gap is expected (feed *held*) or anomalous (feed *stale*).
+- **Ownership is not 1 token = 1 share forever.** Cash dividends are converted to share-equivalents by raising the token's multiplier; the total-return reference already reflects this. Nothing in a wallet or DEX UI shows it.
 
 LumenMarc turns those facts into a reading a person can take in a few seconds and a JSON API that any wallet, aggregator or dashboard can embed.
 
 ---
 
-## Judge's quick tour (about 60 seconds)
+## Feature summary
 
-Paths below are relative to the deployed app. The API is mounted at `/api` on the same host.
-
-| Step | Open | What you will see |
-| --- | --- | --- |
-| 1 | `/` | The **instrument**: one dial showing the widest current reading against its Chainlink reference, the three figures behind it (reference, onchain, premium) and four short chapters on verification, comparison, reading the market and integration |
-| 2 | `/readings` | Every listed token on one rail, widest first, with the dial and a sheet for the selected token: reference, onchain price, venues, feed freshness, supply and the last 24 h of readings |
-| 3 | `/readings?t=TSLAc` | The **unpriced** case: the only TSLAc pool is quoted against a third-party token, so no converted USD price is shown and no premium is computed |
-| 4 | `/check?q=0xB20000000000000000000004255E0c2A4B401401` | **Lookalike verdict**: a third-party B20 "MSTR" token, with the official MSTRc address shown |
-| 5 | `/check?q=0x853F5f1B92b16714Fe6CDA67CAad0856B83C7ab9` | **Pool verdict**: the Aerodrome NVDAc/USDC pool, verified and priced against the reference |
-| 6 | `/portfolio/0x498581fF718922c3f8e6A244956aF099B2652b2b` | **Share-equivalents** and reference-priced value for any address or Basename (read-only) |
-| 7 | `/s/NVDAc` | The full **sheet** for one token: verification checks, venues, last 24 h, size check, holdings, corporate actions, disclosures and integration |
-| 8 | `/embed/NVDAc` | The **embeddable card** |
-| 9 | `/api/overview` · `/api/stocks/NVDAc` · `/api/check?q=TSLAc` | The same data as **JSON**, no key required |
-
-Every reading has a **Copy summary** action that produces a neutral plain-text summary with the block number.
+- **Instrument view** (`/`, `/readings`): one dial per token showing the premium or discount in basis points against the Chainlink reference, the deviation state in words (`fair`, `elevated`, `dislocated`, `unpriced`) and the feed state (`live`, `held`, `stale`, `unavailable`). A 24 hour trace of readings sits under the dial.
+- **Sheet** (`/s/:ticker`): verification checks, reference feed and freshness, primary venue and all other pools, supply and float, share-equivalents, size check, corporate actions, disclosures and integration snippets. A **Copy summary** action produces a neutral plain-text summary with the block number.
+- **Verify** (`/check?q=`): a verdict for a ticker, token address, pool address, Uniswap v4 pool id, wallet address or Basename, with the evidence behind it and the official address when the input is a lookalike.
+- **Portfolio** (`/portfolio/:account`): positions, share-equivalents and reference-priced value for any address or Basename. Read-only, no connection.
+- **Embed** (`/embed/:ticker`): a compact card that works inside an iframe.
+- **Size check**: a constant-product estimate of price impact for a USD amount on the primary pool, combined with the current premium into a signed all-in figure. Refused when the venue is unpriced.
+- **Public JSON API**: everything above as unauthenticated `GET` endpoints, validated against an OpenAPI contract before a response leaves the process.
 
 ---
 
-## What is on the screen
+## Architecture
 
-**Feed state**: freshness of the Chainlink reference, judged against the NYSE calendar:
+```
+Base mainnet (viem, public RPCs with fallbacks) ─────────┐
+  listed B20 tokens: symbol, name, decimals, totalSupply, │
+  supplyCap, multiplier, isPaused(mint/burn/transfer),    │
+  extraMetadata; B20 factory isB20()                      │      ┌────────────────────────┐
+  Chainlink "Coinbase TICKER" feeds: latestRoundData,      ├────▶ │ Snapshot + label engine │
+  description, decimals                                   │      │ feed state             │      ┌─────────────────┐
+  Basenames L2 resolver (forward and reverse)             │      │ venue ranking          │ ───▶ │ Express 5 API   │ ───▶ React UI
+                                                          │      │ premium and deviation  │      │ /api/*          │      /, /readings, /s/:ticker,
+DexScreener public API ───────────────────────────────────┤      │ alerts and lookalikes  │      │ Zod-validated   │      /check, /portfolio,
+  every Base pool for the listed tokens,                  │      │ share-equivalents      │      └─────────────────┘      /embed/:ticker, /about
+  lookalike scan by ticker                                │      └───────────┬────────────┘
+                                                          │                  │
+NYSE calendar 2026 to 2028 (in repo) ─────────────────────┘                  ▼
+                                                             Postgres: premium_snapshots (14 day retention)
+```
 
-| State | Meaning |
+**Packages** (pnpm workspace):
+
+| Package | Role |
 | --- | --- |
-| `live` | Printing during the regular session (or within the last 15 minutes in extended hours) |
-| `held` | US market closed; the feed holds the last regular-session print. Expected, not an error |
-| `stale` | Market open for more than 20 minutes with no new print. Anomalous |
-| `unavailable` | The feed could not be read or returned a non-positive answer |
+| `artifacts/api-server` | Express 5 API mounted at `/api`. Onchain readers, DexScreener client, NYSE calendar, label engine, snapshot worker, routes. Three entries: `index.ts` (long-running server), `netlify.ts` (Netlify Function via `serverless-http`), `vercel.ts` (Vercel function) |
+| `artifacts/lumenmarc` | React 19 + Vite 7 + Tailwind 4 front end. Wouter routing, TanStack Query for data, generated typed hooks from the API contract |
+| `lib/api-spec` | `openapi.yaml`, the single API contract. Orval generates `lib/api-zod` (schemas used by the server to validate every response) and `lib/api-client-react` (typed fetch hooks used by the UI) |
+| `lib/db` | Drizzle schema for `premium_snapshots`. Optional at runtime |
+| `scripts` | Plain Node scripts that assemble the Netlify and Vercel deployments |
+| `artifacts/mockup-sandbox` | Component preview sandbox used during design work on Replit. Not deployed and not part of the product |
 
-**Deviation state**: pool price versus the reference:
+**Snapshot lifecycle**
 
-| State | Threshold |
-| --- | --- |
-| `fair` | within 50 bps |
-| `elevated` | 50 to 300 bps |
-| `dislocated` | more than 300 bps |
-| `unpriced` | no pool, no readable reference or a pool that is quoted against an asset that is not USD-comparable |
+- One un-chunked multicall for tokens, one for feeds, one DexScreener sweep, then classification. Public Base RPCs reject chunked or parallel multicalls, so reads are sequential and batched at the RPC level.
+- Long-running mode (`index.ts`): a background worker refreshes every 60 seconds and requests are served from memory.
+- Serverless mode (Netlify, Vercel): a function instance recomputes when its in-memory snapshot is older than 45 seconds; concurrent requests share one computation. Read endpoints send `Cache-Control` headers so the CDN absorbs bursts.
+- Lookalike scan every 10 minutes. `/check` and `/portfolio` read the chain on demand.
+- With `DATABASE_URL` set, a row per token is written at most every 50 seconds and kept for 14 days. `GET /api/cron/snapshot` lets an external scheduler keep history continuous on serverless hosts.
 
-**Venue ranking**: pools whose counter-asset is USDC, ETH/WETH or another Coinbase-issued stock rank first, then by liquidity; the first is the *primary* venue that drives the headline. Pools below $25K liquidity carry a thin-liquidity warning. Pools quoted against anything else are unpriced: the API exposes no converted USD price for them and no premium is produced.
+**Identity is the address.** The pinned official list in `artifacts/api-server/src/lib/b20/addresses.ts` is the only thing that makes a token "Coinbase-issued". `isB20()`, the `0xB200` prefix and onchain metadata are displayed but never trusted, because third-party tokens satisfy all three.
 
-**Size check**: a constant-product *estimate* of price impact for a given USD amount on the primary pool, combined with the current premium into a signed all-in figure (premium + impact for buys, premium − impact for sells). It is an approximation, not a guaranteed bound. It is refused when the primary pool is unpriced.
+---
+
+## Data sources
+
+| Source | What is read | Notes |
+| --- | --- | --- |
+| Base mainnet RPC | B20 token state (`symbol`, `name`, `decimals`, `totalSupply`, `supplyCap`, `multiplier`, `isPaused(uint8)`, `extraMetadata`, `scaledBalanceOf`), `B20Factory.isB20()`, Chainlink `latestRoundData` | Public RPCs `mainnet.base.org`, `base-rpc.publicnode.com`, `base.drpc.org`, `1rpc.io/base` behind a fallback transport. `BASE_RPC_URL` adds a keyed endpoint first |
+| Chainlink "Coinbase TICKER" feeds | Reference price, 8 decimals, total-return | The feed and the token multiplier stay comparable after dividends |
+| DexScreener public API | Every Base pool for the listed tokens (price, liquidity, quote asset, DEX), lookalike search by ticker | Bounded in-process cache; rate-limited upstream |
+| Basenames L2 resolver | Forward and reverse resolution for `/check` and `/portfolio` inputs | Onchain, no third-party API |
+| NYSE calendar | Regular session, early closes and holidays for 2026 to 2028 | Maintained in the repo, drives `live`, `held` and `stale` |
+| Coinbase's published token list | The addresses that define "Coinbase-issued" | Pinned in `addresses.ts` with the matching Chainlink feed for each ticker |
+
+B20 tokens are Base-native precompiles at `0xB200` addresses with no bytecode and no verified source. `paused()` reverts, so feature pauses are read with `isPaused(uint8)`. `extraMetadata("isin")` uses a lowercase key. `scaledBalanceOf` returns share-equivalents.
+
+---
+
+## Integrity rules
+
+These rules are enforced in the API, checked against the OpenAPI schemas and mirrored in the UI.
+
+1. **Nothing is mocked.** Every number comes from a Base RPC call, a Chainlink round, DexScreener or arithmetic on those. There are no placeholder values, sample data or hardcoded counts.
+2. **A failed read never becomes a default.** If a refresh fails after a first success, the previous block-stamped snapshot is kept and a warning is surfaced; the block number is shown on the readings page. Before the first successful read the API answers `503 snapshot_unavailable` with a reason. An upstream outage is reported as `502` or `503`, never as "not found".
+3. **Only USD-stablecoin quotes are priced.** A pool is compared with the Chainlink reference only when its counter-asset is a recognised USD stablecoin (USDC on Base). Pools quoted in ETH/WETH or in another Coinbase-issued stock are recognised but `unpriced` with a calm note; pools quoted in any other token are `unpriced` with a warning. For an unpriced pool `priceUsd` and `poolPrice` are `null`, no premium is computed and the size check is refused with `422`. A USD figure inferred through the counter-asset's own market never leaves the process. This is why TSLAc reads "Unpriced" everywhere.
+4. **Feed state is judged against the market calendar.** `live` while the feed prints during the regular session (or within the last 15 minutes in extended hours); `held` when the US market is closed and the feed holds the last print; `stale` when the market has been open for more than 20 minutes with no new print; `unavailable` when the feed cannot be read or returns a non-positive answer.
+5. **Deviation thresholds are fixed and stated.** `fair` within 50 bps of the reference, `elevated` from 50 to 300 bps, `dislocated` above 300 bps.
+6. **Venues are ranked, then trusted in that order.** USD-stablecoin pools rank first, then by liquidity; the first is the primary venue that drives the headline. Pools under $25K liquidity carry a thin-liquidity warning.
+7. **Identity comes from the pinned list only.** A token that passes `isB20()`, carries the `0xB200` prefix and copies the name and symbol is still reported as a lookalike when its address is not on Coinbase's list.
+8. **Every response is schema-validated** before it is sent. A response that does not match `openapi.yaml` is a server error, not a partially rendered page.
 
 ---
 
 ## Public JSON API
 
-All endpoints are `GET`, unauthenticated and served under `/api`. The contract is `lib/api-spec/openapi.yaml`; responses are validated server-side against the generated Zod schemas before they leave the process.
+All endpoints are `GET`, unauthenticated and served under `/api`. The contract is [`lib/api-spec/openapi.yaml`](lib/api-spec/openapi.yaml).
 
 | Endpoint | Returns |
 | --- | --- |
-| `/api/market` | US session state (open / premarket / afterhours / closed / holiday), next open/close |
-| `/api/overview` | The aggregate view: session, integrity alerts, aggregate float and liquidity, all stocks ranked by dislocation |
-| `/api/stocks` | Compact rows for every listed stock |
-| `/api/stocks/{ticker}` | The full label (`summary`, `verify`, `price`, `own`, `supply`, `venues`, `pauses`, `metadata`, `corporateActions`, `disclosures`, `history`, `shareText`) |
-| `/api/history?ticker=NVDAc&window=24h` | Premium history points (reference, pool price where USD-comparable, premium bps, feed state) |
-| `/api/size-check?ticker=NVDAc&amountUsd=10000&side=buy` | Estimated impact and all-in vs. reference for a size; `422` when the venue is unpriced |
-| `/api/check?q=…` | A verdict for a ticker, token address, pool address, Uniswap v4 pool id, wallet address or Basename |
-| `/api/portfolio/{account}` | Positions, share-equivalents and reference-priced value for an address or Basename |
 | `/api/healthz` | Liveness |
+| `/api/market` | US session state (`open`, `premarket`, `afterhours`, `closed`, `holiday`), next open and close |
+| `/api/overview` | Session, integrity alerts, aggregate float and liquidity, every stock ranked by dislocation |
+| `/api/stocks` | Compact rows for every listed stock |
+| `/api/stocks/{ticker}` | The full label: `summary`, `verify`, `price`, `own`, `supply`, `venues`, `pauses`, `metadata`, `corporateActions`, `disclosures`, `history`, `shareText` |
+| `/api/history?ticker=NVDAc&window=24h` | Premium history points (reference, pool price where USD-comparable, premium bps, feed state). Windows: `1h`, `6h`, `24h`, `7d` |
+| `/api/size-check?ticker=NVDAc&amountUsd=10000&side=buy` | Estimated impact and all-in figure versus the reference; `422` when the venue is unpriced |
+| `/api/check?q=...` | A verdict for a ticker, token address, pool address, Uniswap v4 pool id, wallet address or Basename |
+| `/api/portfolio/{account}` | Positions, share-equivalents and reference-priced value for an address or Basename |
+| `/api/cron/snapshot` | Refreshes the snapshot when it is stale; a forced refresh with `Authorization: Bearer CRON_SECRET` |
 
-Example:
+Missing required query parameters return `400 bad_request`; unknown tickers return `404 not_found`; upstream outages return `502` or `503` with a reason.
 
 ```bash
+APP=https://lumenmarc.netlify.app
+
 curl -s "$APP/api/check?q=0xB20000000000000000000004255E0c2A4B401401" | jq '{kind, verdict, headline}'
 # {
 #   "kind": "lookalike-b20",
 #   "verdict": "danger",
 #   "headline": "Not a Coinbase stock: \"MSTR\" is a third-party B20 token imitating MSTRc"
 # }
+
+curl -s "$APP/api/stocks/TSLAc" | jq '{ticker: .summary.ticker, reference: .price.reference.price, poolPriceUsd: .price.primaryVenue.priceUsd, premiumBps: .price.premiumBps, deviationState: .price.deviationState}'
+# {
+#   "ticker": "TSLAc",
+#   "reference": 367.24995,
+#   "poolPriceUsd": null,
+#   "premiumBps": null,
+#   "deviationState": "unpriced"
+# }
 ```
 
-Embeddable card: `/embed/{ticker}` (works in an iframe).
+Embeddable card: `/embed/{ticker}`.
 
 ---
 
-## How it works
+## Running locally
 
-```
-Base mainnet ──(viem multicall, public RPCs)──┐
-  • listed B20 tokens: symbol, name, decimals, │
-    totalSupply, supplyCap, multiplier,         │
-    isPaused(mint/burn/transfer), extraMetadata │      ┌──────────────────────┐
-  • B20 factory isB20()                         ├────▶ │  Label engine        │
-  • Chainlink "Coinbase <TICKER>" feeds         │      │  feed state          │      ┌───────────────┐
-    latestRoundData, description, decimals      │      │  venue ranking       │ ───▶ │ Express API    │ ───▶ React UI
-  • Basenames L2 resolver (forward + reverse)   │      │  premium / deviation │      │ /api/*         │      /, /readings,
-                                                │      │  alerts, lookalikes  │      │ (Zod-validated)│      /s/:ticker, /check,
-DexScreener public API ─────────────────────────┤      │  share-equivalents   │      └───────────────┘      /portfolio, /embed/:ticker
-  • every Base pool for the listed tokens       │      └──────────┬───────────┘
-  • lookalike scan by ticker                    │                 │
-                                                │                 ▼
-NYSE calendar (2026 to 2028, in repo) ──────────┘      Postgres: premium_snapshots (60 s, 14-day retention)
+Requirements: Node.js 20 or newer (22 recommended) and pnpm 10 (`corepack enable` picks up the pinned version). Postgres is optional.
+
+```bash
+git clone https://github.com/vaibhav0xq/lumenmarc.git && cd lumenmarc
+pnpm install
+cp .env.example .env                        # every variable is optional; the file explains what each one enables
+pnpm --filter @workspace/db run push        # only if DATABASE_URL is set: creates premium_snapshots
+pnpm --filter @workspace/api-server run dev # API on $PORT (default 8080), mounted at /api, refresh every 60 s
+pnpm --filter @workspace/lumenmarc run dev  # UI on $PORT (default 5173); /api is proxied to the API in dev
 ```
 
-- **Snapshot worker** refreshes every 60 seconds: one un-chunked multicall for tokens, one for feeds, one DexScreener sweep, then classification and persistence. Requests are served from the in-memory snapshot; `/check` and `/portfolio` read the chain on demand.
-- **Identity is the address.** The pinned official list (`artifacts/api-server/src/lib/b20/addresses.ts`) is the only thing that makes a token "Coinbase-issued". `isB20()`, the `0xB200…` prefix and onchain metadata are displayed but never trusted, because third-party tokens satisfy all three.
-- **Nothing is mocked.** Every number on screen comes from a Base RPC call, a Chainlink round, DexScreener or arithmetic on those. When a source is unavailable the UI says so instead of showing a placeholder: a feed that cannot be read is `unavailable`, a pool that is not USD-comparable is `unpriced` with no premium and no converted price. A failed onchain read keeps the previous block-stamped snapshot (the block number is shown on the readings page) rather than substituting defaults. The API answers 503/502 with a reason before its first successful read.
+- `pnpm run typecheck` checks every package.
+- Editing `lib/api-spec/openapi.yaml` requires `pnpm --filter @workspace/api-spec run codegen`, which regenerates `lib/api-zod` and `lib/api-client-react`.
+- No API keys are required. A keyed Base RPC (`BASE_RPC_URL`) only makes refreshes more reliable.
 
-### Onchain facts LumenMarc relies on
+| Variable | Required | What it does |
+| --- | --- | --- |
+| `BASE_RPC_URL` | no (recommended in production) | Keyed Base RPC endpoint tried before the public RPCs |
+| `DATABASE_URL` | no | Postgres for the premium-history series; without it history endpoints answer `history_disabled` |
+| `PUBLIC_APP_URL` | no | Canonical origin for share text and embed snippets |
+| `CRON_SECRET` | no | Bearer secret that allows forced refreshes on `GET /api/cron/snapshot` |
+| `LOG_LEVEL` | no | pino log level, default `info` |
+| `API_PROXY_TARGET` | no (dev only) | Where the Vite dev server forwards `/api` |
 
-- B20 tokens are Base-native precompiles at `0xB200…` addresses (no bytecode, no verified source). `paused()` reverts; feature pauses are read with `isPaused(uint8)`. `extraMetadata("isin")` is exposed with a lowercase key. `scaledBalanceOf` returns share-equivalents.
-- Chainlink "Coinbase &lt;TICKER&gt;" feeds have 8 decimals and are total-return: the multiplier and the reference stay comparable after dividends.
-- Issuer: Coinbase Onchain SPV Ltd. (ADGM), Regulation S, eligible non-US persons only. Base is the network; Coinbase is the issuer.
+---
+
+## Deployment
+
+The production deployment is **Netlify**: the Vite front end as static files and the Express API as one Netlify Function behind `/api/*`, built from `main` on every push. The same code also deploys to **Vercel**. Both paths are documented step by step:
+
+- [docs/DEPLOY_NETLIFY.md](docs/DEPLOY_NETLIFY.md): settings, environment variables, how history behaves on serverless, smoke test, CLI deploy
+- [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md): the Build Output API equivalent
+
+```bash
+pnpm run build:netlify           # reproduces the Netlify build: artifacts/lumenmarc/dist/public + netlify/functions/api
+pnpm run build:vercel            # reproduces the Vercel build: .vercel/output/
+node scripts/vercel-serve.mjs    # serves the Vercel output on http://localhost:3000
+```
+
+Any Node host works too: `pnpm --filter @workspace/api-server run build` produces `dist/index.mjs` (listens on `PORT`, keeps the background refresh loop) and `BASE_PATH=/ pnpm --filter @workspace/lumenmarc run build` produces the static site in `artifacts/lumenmarc/dist/public`.
 
 ---
 
 ## Repository map
 
 ```
-artifacts/api-server/           Express 5 API (mounted at /api)
-  src/lib/b20/addresses.ts      The official tokens + feeds, factory, quote assets  ← source of truth
-  src/lib/b20/{abi,chain,readers}.ts   ABIs, viem client (fallback RPCs), multicall readers
-  src/lib/market/hours.ts       NYSE session calendar and state
-  src/lib/label/engine.ts       Feed/deviation classification, venue ranking, alerts, label copy
-  src/lib/venues/dexscreener.ts DexScreener client (bounded cache)
-  src/lib/snapshot/worker.ts    Snapshot refresh (background worker or on-demand), lookalike scan, persistence
-  src/routes/                   market, overview, stocks, history, size-check, check, portfolio, cron
-  src/index.ts / src/vercel.ts  Long-running server entry / serverless handler entry
-artifacts/lumenmarc/            React + Vite + Tailwind front end (landing, readings, sheet, check, portfolio, embed, about)
-docs/design/instrument-style.md The approved instrument style: dark engineering-drawing instrument, Newsreader display serif, motion rules
-artifacts/mockup-sandbox/       Internal component-preview sandbox used during design work (not deployed)
-lib/api-spec/openapi.yaml       API contract → Orval → lib/api-zod + lib/api-client-react
-lib/db/                         Drizzle schema (premium_snapshots); optional at runtime
-scripts/vercel-build.mjs        Assembles the Vercel Build Output (static site + /api function)
-docs/DEPLOY_VERCEL.md           Deployment guide and environment variables
-docs/research/                  The research brief, opportunity map, originality check and source registry behind the product
-docs/LOOM_SCRIPT.md             Demo script
-docs/SUBMISSION_CHECKLIST.md    Submission checklist
+artifacts/api-server/src/
+  lib/b20/addresses.ts          Official tokens and feeds, factory, quote assets (source of truth)
+  lib/b20/{abi,chain,readers}.ts ABIs, viem client with fallback RPCs, multicall readers
+  lib/market/hours.ts           NYSE session calendar and state
+  lib/label/engine.ts           Feed and deviation classification, venue ranking, alerts, label copy
+  lib/venues/dexscreener.ts     DexScreener client with a bounded cache
+  lib/snapshot/worker.ts        Snapshot refresh (worker or on-demand), lookalike scan, persistence
+  lib/basename.ts               Basenames forward and reverse resolution
+  routes/                       market, overview, stocks, history, size-check, check, portfolio, cron, health
+  index.ts | netlify.ts | vercel.ts   Server entry, Netlify Function entry, Vercel function entry
+artifacts/lumenmarc/src/
+  pages/                        landing, readings, label (sheet), check, portfolio, embed, about, not-found
+  components/instrument/        Comparator dial, premium trace, dimension figure, rail, sheet panel
+lib/api-spec/openapi.yaml       API contract; Orval generates lib/api-zod and lib/api-client-react
+lib/db/                         Drizzle schema for premium_snapshots
+scripts/                        netlify-build.mjs, vercel-build.mjs, vercel-serve.mjs
+netlify.toml, vercel.json       Host configuration
+docs/DEPLOY_NETLIFY.md          Netlify guide (production)
+docs/DEPLOY_VERCEL.md           Vercel guide
+docs/design/instrument-style.md The shipped visual system: dark instrument, Newsreader display serif, motion rules
+docs/research/                  Research report, onchain snapshot, source registry and captured sources
+docs/screenshots/               The screenshots used in this README
 ```
-
-## Running locally
-
-Requirements: Node.js 20+ (22 recommended), pnpm 10 (`corepack enable` picks up the pinned version). Postgres is optional.
-
-```bash
-git clone https://github.com/vaibhav0xq/lumenmarc.git && cd lumenmarc
-pnpm install
-cp .env.example .env                        # every variable is optional; see the file for what each enables
-# DATABASE_URL=postgres://...              → premium history (run the schema push below once)
-# BASE_RPC_URL=https://...                 → keyed Base RPC; public RPCs with fallbacks are used otherwise
-pnpm --filter @workspace/db run push        # only if DATABASE_URL is set: creates premium_snapshots
-pnpm --filter @workspace/api-server run dev # API on $PORT (default 8080), mounted at /api, background refresh every 60 s
-pnpm --filter @workspace/lumenmarc run dev  # UI on $PORT (default 5173); /api is proxied to the API in dev
-```
-
-`pnpm run typecheck` checks every package. Editing `lib/api-spec/openapi.yaml` requires `pnpm --filter @workspace/api-spec run codegen`.
-
-No API keys are required for anything in this repository. A keyed Base RPC only makes refreshes more reliable.
-
-## Deploying
-
-The project is set up for **Netlify** and **Vercel** (static front end + one serverless function for `/api` on either). Import the repo, add the environment variables and deploy. The walkthroughs, the environment-variable table and how history behaves on serverless are in **[docs/DEPLOY_NETLIFY.md](docs/DEPLOY_NETLIFY.md)** and **[docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md)**.
-
-```bash
-pnpm run build:netlify           # reproduces the Netlify build locally → artifacts/lumenmarc/dist/public + netlify/functions/api
-pnpm run build:vercel            # reproduces the Vercel build locally → .vercel/output/
-node scripts/vercel-serve.mjs    # serves the Vercel output on http://localhost:3000
-```
-
-Any Node host works too: `pnpm --filter @workspace/api-server run build` produces `dist/index.mjs` (listens on `PORT`, keeps the background refresh loop) and `BASE_PATH=/ pnpm --filter @workspace/lumenmarc run build` produces the static site in `artifacts/lumenmarc/dist/public`.
-
-| Variable | Required | What it does |
-| --- | --- | --- |
-| `BASE_RPC_URL` | no (recommended) | Keyed Base RPC endpoint; public RPCs with fallbacks otherwise |
-| `DATABASE_URL` | no | Postgres for the premium-history series; without it history endpoints answer `history_disabled` |
-| `PUBLIC_APP_URL` | no | Canonical origin for share text and embed snippets |
-| `CRON_SECRET` | no | Bearer secret for `GET /api/cron/snapshot` (scheduled refreshes on serverless hosts) |
-| `LOG_LEVEL` | no | pino log level, default `info` |
 
 ---
 
-## Positioning and disclosures
+## Limitations
 
-- LumenMarc is **informational**. It does not execute, route, recommend or solicit trades and it never promises returns. Text throughout the product is factual and neutral by design.
+- Public Base RPCs and DexScreener's public API are the data sources. Both are rate-limited, so the snapshot cadence is 60 seconds and `/check` or `/portfolio` can take a few seconds on a cold address.
+- Premium history only accumulates while a snapshot is being computed. On serverless hosts that means traffic or a scheduler hitting `/api/cron/snapshot`; without either, the trace has gaps.
+- The size check is a constant-product approximation on the primary pool. It is an estimate, not a quote. It ignores routing across pools.
+- The NYSE calendar is maintained in the repo through 2028 and logs a warning beyond that.
+- No Coinbase corporate action (dividend or split) had been processed onchain as of Sep 10, 2026, so the corporate-action panel shows the multiplier state rather than a history of events.
+- Tokens on Coinbase's list that have no minted supply yet are shown as `no supply` and carry no price.
+- Lookalike detection covers B20 tokens that DexScreener indexes under a listed ticker. A lookalike that has not traded on an indexed venue is only caught when its address is checked directly.
+- DEX pool prices come from permissionless pools that can be thin or volatile. Nothing here guarantees execution at any price.
+
+---
+
+## Disclosures
+
+- LumenMarc is **informational**. It does not execute, route, recommend or solicit trades and it never promises returns. Copy throughout the product is factual and neutral by design.
 - Coinbase Tokenized Stocks are issued by Coinbase (Coinbase Onchain SPV Ltd., ADGM) under Regulation S and are **not available to US persons**. Base is the settlement network, not the issuer.
-- LumenMarc is an independent data layer and is **not affiliated** with Coinbase, Base or Chainlink.
-- Onchain pool prices come from permissionless DEX pools that can be thin or volatile; nothing here guarantees execution at any price. Data may be delayed; verify onchain before acting.
+- LumenMarc is an independent project. It is not affiliated with, endorsed by or operated by Coinbase, Base or Chainlink. "Coinbase Tokenized Stocks" and "B20" refer to Coinbase's publicly documented products and contracts.
+- Data may be delayed. Verify onchain before acting.
 
-## Known limits (stated on purpose)
+---
 
-- Public Base RPCs and DexScreener's public API are the data sources; both are rate-limited, so the snapshot cadence is 60 seconds and `/check` may take a few seconds on a cold address.
-- The NYSE holiday calendar is maintained in-repo through 2028 and logs a warning beyond that.
-- No Coinbase corporate action (dividend or split) had been processed onchain as of Sep 7, 2026, so the corporate-action panel currently shows the multiplier state rather than a history of events.
-- Premium history only accumulates while the server is running.
+## Research and evidence
 
-## Roadmap (not part of this submission)
+- [docs/research/base-builder-quest-report.md](docs/research/base-builder-quest-report.md): the research brief behind the product (market structure, issuer and legal posture, existing app layer, scored opportunity map, originality check and the spec LumenMarc was built from)
+- [docs/research/onchain-snapshot-2026-09-07.md](docs/research/onchain-snapshot-2026-09-07.md): the live measurements quoted above, with block numbers
+- [docs/research/sources.json](docs/research/sources.json) and [docs/research/sources/](docs/research/sources/): the source registry and captured pages
+- [docs/research/tools/](docs/research/tools/): the headless-Chromium capture scripts used for QA and for the screenshots in this README
 
-- **LumenGuard**: a small onchain guard that lets a user bound a swap by maximum deviation from the Chainlink reference (user-initiated, neutral routing).
-- Alerts (feed stale, dislocation, lookalike appearing) and a Base App mini app.
+---
 
-## Research
+## Contributing, security and license
 
-`docs/research/base-builder-quest-report.md` contains the full research brief (market structure, issuer/legal posture, existing app layer, scored opportunity map of ideas, originality check and the 20-point spec LumenMarc was built from), with the source registry in `docs/research/sources.json` and captured evidence in `docs/research/sources/`.
+- Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md). Product behavior changes need an issue first; data must stay real.
+- Security: see [SECURITY.md](SECURITY.md) for responsible disclosure.
+- License: [MIT](LICENSE).
 
-## Author and license
+---
 
-Designed and built by **vaibhav0xq** ([github.com/vaibhav0xq](https://github.com/vaibhav0xq)). Released under the [MIT License](LICENSE).
+<div align="center">
 
-LumenMarc is an independent project. It is not affiliated with, endorsed by or operated by Coinbase, Base or Chainlink; "Coinbase Tokenized Stocks" and "B20" refer to Coinbase's publicly documented products and contracts.
+Designed and built by **vaibhav0xq**
+
+[GitHub](https://github.com/vaibhav0xq) · [X](https://x.com/vaibhav_0xq) · [Live app](https://lumenmarc.netlify.app) · [Repository](https://github.com/vaibhav0xq/lumenmarc)
+
+</div>
